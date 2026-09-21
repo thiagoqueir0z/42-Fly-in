@@ -6,16 +6,18 @@ VENV := venv
 
 .PHONY: install run run-map debug clean lint lint-strict help venv
 
+all: lint run
+
 help:
 	@echo "Fly-in Project - Available targets:"
-	@echo "  make install       - Install project dependencies"
-	@echo "  make run           - Run with default map (easy/01_linear_path.txt)"
+	@echo "  make install            - Install project dependencies"
+	@echo "  make run                - Run with default map (easy/01_linear_path.txt)"
 	@echo "  make run-map MAP=<file> - Run with specific map"
-	@echo "  make debug         - Run in debug mode with pdb"
-	@echo "  make clean         - Remove temporary files and caches"
-	@echo "  make lint          - Run flake8 and mypy linters"
-	@echo "  make lint-strict   - Run mypy with strict mode"
-	@echo "  make venv          - Create virtual environment (optional)"
+	@echo "  make debug              - Run in debug mode with pdb"
+	@echo "  make clean              - Remove temporary files and caches"
+	@echo "  make lint               - Run flake8 and mypy linters"
+	@echo "  make lint-strict        - Run mypy with strict mode"
+	@echo "  make venv               - Create virtual environment (optional)"
 
 venv:
 	$(PYTHON) -m venv $(VENV)
