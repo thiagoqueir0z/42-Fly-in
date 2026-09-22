@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by thiagoqueir0z.*
+*This project has been created as part of the 42 curriculum by thiferre.*
 
 ## Description
 
@@ -13,16 +13,30 @@ The system must:
 
 ## Instructions
 
+### Setup & Virtual Environment
+
+1. Create and activate the virtual environment:
+```bash
+make venv
+source venv/bin/activate
+```
+
 ### Installation
 
 ```bash
 make install
 ```
 
-### Running the Simulation
+### Running the Simulation with Default Map
 
 ```bash
 make run
+```
+
+### Running a Specific Map
+
+```bash
+make run-map MAP=maps/medium/03_circular_loop.txt
 ```
 
 ### Debug Mode
@@ -100,6 +114,26 @@ The system provides:
 - **Terminal colors**: ANSI color codes for different zone types
 - **Turn-by-turn display**: Shows each drone movement
 - **Statistics**: Total turns, drones per turn, path efficiency
+
+## Example Input & Expected Output
+
+### Input Map File (`map.txt`)
+```text
+nb_drones: 2
+start_hub: start 0 0 [color=green]
+end_hub: goal 10 10 [color=yellow]
+hub: roof1 3 4 [zone=normal]
+hub: corridorA 4 3 [zone=normal]
+connection: start-roof1
+connection: start-corridorA
+connection: roof1-goal
+connection: corridorA-goal
+```
+
+```text
+D1-roof1 D2-corridorA
+D1-goal D2-goal
+```
 
 ## Resources
 
