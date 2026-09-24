@@ -1,11 +1,13 @@
 """Connection class representing edges between zones."""
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from src.model.zone import Zone
 
 
+@dataclass
 class Connection:
     """Represents a bidirectional connection between two zones.
 
@@ -18,35 +20,25 @@ class Connection:
         max_link_capacity (int): Max drones traversing simultaneously.
     """
 
-    def __init__(
-        self,
-        zone_a: "Zone",
-        zone_b: "Zone",
-        max_link_capacity: int = 1,
-    ) -> None:
-        """Initialize a Connection.
+    zone_a: "Zone"
+    zone_b: "Zone"
+    max_link_capacity: int = 1
 
-        Args:
-            zone_a: First zone.
-            zone_b: Second zone.
-            max_link_capacity: Maximum drones on this connection (default: 1).
+    def __post_init__(self) -> None:
+        """Validate attributes after dataclass initialization."""
+        if self.max_link_capacity < 1:
+            raise ValueError(
+                f"max_link_capacity must be at least 1. got {self.max_link_capacity}"
+            )
+        if self.zone_a == self.zone_b:
+            raise ValueError(
+                f"Connection cannot link a zone to itself: {self.zone_a.name}"
+            )
 
-        Raises:
-            ValueError: If max_link_capacity is less than 1.
-        """
-        pass
-
-    def connects(self, zone_a: "Zone", zone_b: "Zone") -> bool:
-        """Check if this connection links the two given zones.
-
-        Args:
-            zone_a: First zone to check.
-            zone_b: Second zone to check.
-
-        Returns:
-            True if connection links these zones in any direction.
-        """
-        pass
+    def connects(self, zone_1: "Zone", zone_2: "Zone") -> bool:
+        """Check if this connection links the two given zones."""
+        return (self.zone_a == zone_1 and self.zone_b == zone_2) or \
+            (self.zone_a == zone_2 and self.zone_b == zone_1)
 
     def get_neighbor(self, zone: "Zone") -> "Zone | None":
         """Get the neighbor zone on the other end of this connection.
