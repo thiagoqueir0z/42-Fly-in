@@ -40,7 +40,7 @@ class Connection:
         return (self.zone_a == zone_1 and self.zone_b == zone_2) or \
             (self.zone_a == zone_2 and self.zone_b == zone_1)
 
-    def get_neighbor(self, zone: "Zone") -> "Zone | None":
+    def get_neighbor(self, zone: "Zone") -> Optional["Zone"]:
         """Get the neighbor zone on the other end of this connection.
 
         Args:
@@ -50,26 +50,22 @@ class Connection:
             The connected zone, or None if the given zone is not part
             of this connection.
         """
-        pass
+        if zone == self.zone_a:
+            return self.zone_b
+        if zone == self.zone_b:
+            return self.zone_a
+        return None
 
-    def can_accommodate_drone(self, current_count: int) -> bool:
+    def can_accommodate_drone(self, drones_in_transit: int) -> bool:
         """Check if the connection can accommodate another drone.
 
         Args:
-            current_count: Current number of drones using this connection.
+            drones_in_transit: Current number of drones using this connection.
 
         Returns:
             True if capacity allows, False otherwise.
         """
-        pass
-
-    def __repr__(self) -> str:
-        """Return string representation of the connection.
-
-        Returns:
-            String in format: Connection(zone_a - zone_b, capacity).
-        """
-        pass
+        return drones_in_transit < self.max_link_capacity
 
     def __hash__(self) -> int:
         """Return hash of the connection.
@@ -77,7 +73,7 @@ class Connection:
         Returns:
             Hash value based on both zones.
         """
-        pass
+        return hash(frozenset([self.zone_a.name, self.zone_b.name]))
 
     def __eq__(self, other: object) -> bool:
         """Check equality with another connection.
@@ -88,4 +84,6 @@ class Connection:
         Returns:
             True if both connections link the same zones.
         """
-        pass
+        if not isinstance(other, Connection):
+            return NotImplemented
+        return self.connects(other.zone_a, other.zone_b)
