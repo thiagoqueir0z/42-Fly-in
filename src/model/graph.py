@@ -25,5 +25,28 @@ class Graph:
 
     num_drones: int
     zones: Dict[str, Zone] = field(default=dict, init=False)
+    connections: Set[Connection] = field(default_factory=set, init=False)
+    adjacency_list: Dict[str, List[Connection]] = field(default_factory=Dict, init=False)
+    start_zone: Optional[Zone] = field(default=None, init=False)
+    end_zone: Optional[Zone] = field(default=None, init=False)
 
+    def __post_init__(self) -> None:
+        """Validate attributes after dataclass initialization."""
+        if self.num_drones < 1:
+            raise ValueError(f"num_drones must be at least 1, got {self.num_drones}")
 
+    def add_zone(self, zone: Zone) -> None:
+        """Add a zone to the graph and initialize its adjacency list.
+
+        Args:
+            zone: The zone to add.
+
+        Raises:
+            ValueError: If a zone with the same name already exists.
+        """
+        if zone.name in self.zones:
+            raise ValueError(f"Zone '{zone.name}' already exists in the graph.")
+        
+        self.zones[zone.name] = zone
+        self.adjacency_list[zone.name] = []
+        
