@@ -46,7 +46,49 @@ class Graph:
         """
         if zone.name in self.zones:
             raise ValueError(f"Zone '{zone.name}' already exists in the graph.")
-        
+
         self.zones[zone.name] = zone
         self.adjacency_list[zone.name] = []
+
+        if zone.is_start:
+            if self.start_zone is not None:
+                raise ValueError("Graph cannot have multiple start zones.")
+            self.start_zone = zone
+
+        if zone.is_end:
+            if self.end_zone is not None:
+                raise ValueError("Graph cannot have multiple end zones.")
+            self.end_zone = zone
+
+    def add_connection(self, connection: Connection) -> None:
+        """Add a bidirectional connection between two zones.
+
+        Args:
+            connection: The connection to add.
+
+        Raises:
+            ValueError: If the connection links unknown zones or is a duplicate one.
+        """
+        if (
+            connection.zone_a.name not in self.zones 
+            or connection.zone_b.name not in self.zones
+        ):
+            raise ValueError(
+                f"Cannot add connection {connection.zone_a.name}-{connection.zone_b.name}:"
+                "One or both zones are not in the graph"
+            )
+
+        if connection in self.connections:
+            raise ValueError(
+                f"Duplicate connection detected: {connection.zone_a.name}-{connection.zone_b.name}"
+            )
+
+        self.connections.add(self.connection)
+
+        self.adjacency_list[connection.zone_a.name].append(connection)
+        self.adjacency_list[connection.zone_b.name].append(connection)
+
+        def get_zone(self, name: str) -> Optional[Zone]:
+            """Retrieve a zone by its name."""
+            return self.zones.get(name)
         
