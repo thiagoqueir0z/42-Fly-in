@@ -1,5 +1,14 @@
-"""Model module defining core data structures.
+"""Model package containing the core data structures for the Fly-in network."""
 
-Contains classes for representing zones, drones, connections, and
-the overall graph structure.
-"""
+from .connection import Connection
+from .drone import Drone
+from .graph import Graph
+from .zone import Zone, ZoneType
+
+__all__ = [
+    "Connection",
+    "Drone",
+    "Graph",
+    "Zone",
+    "ZoneType",
+]
