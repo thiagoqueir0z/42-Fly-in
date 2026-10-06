@@ -1,132 +1,145 @@
-from typing import Dict, List, Tuple
-from src.model.graph import Graph
-from src.model.zone import Zone
-from src.model.connection import Connection
+"""MapParser class for reading and validating Fly-in network files."""
+
+import re
+from pathlib import Path
+from typing import Dict, Tuple
+
+from src.model import Connection, Graph, Zone, ZoneType
+
+
+class MapParserError(Exception):
+    """Custom exception raised when a map file contains invalid syntax or logic."""
+    pass
 
 
 class MapParser:
-    """Parser for drone network map configuration files.
+    """Parses map configuration files and builds the network Graph.
+
+    Reads the provided text file line by line, extracts drones, zones,
+    and connections, validates the logic, and instantiates the OOP models.
 
     Attributes:
-        filename (str): Path to the map configuration file.
+        filepath (Path): Path to the map configuration file.
     """
 
-    def __init__(self, filename: str) -> None:
-        """Initialize the map parser.
+    def __init__(self, filename: str | Path) -> None:
+        """Initialize the MapParser.
 
         Args:
-            filename: Path to the map configuration file.
+            filepath: String or Path object pointing to the map file.
         """
-        self.filename = filename
+        self.filepath = Path(filepath)
 
     def parse(self) -> Graph:
-        """Parse the map configuration file and return a Graph object.
+        """Parse the file and build the complete network graph.
 
         Returns:
-            A Graph object representing the parsed map.
-
+            A Graph object ready for simulation.
         Raises:
-            FileNotFoundError: If the map file does not exist.
-            ValueError: If the map file has invalid format or syntax.
+            MapParseError: If file is missing, empty, or contains invalid syntax.
         """
-        try:
-            with open(self.filename, "r", encoding="utf-8") as file:
-                lines = file.readlines()
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Could Not find map file: {self.filename}")
-        
-        num_drones = None
-        zones = []
-        connections = []
-        start_zone = None
-        end_zone = None
+        if not self.filepath.exists() or not self.filepath.is_file():
+            raise MapParserError(f"Map file not found: {self.filepath}")
 
-        for idx, Line in enumerate(lines, 1):
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if ":" not in line:
-                raise ValueError(f"Syntax errorat line {idx}: Missing ':' separator.")
-            prefix = prefix.strip()
-            rest = rest.strip()
-        
-        if prefix == "nb_drones":
-            if num_drones is not None:
-                raise ValueError(f"Duplicated nb_drones at line {idx}")
-            try:
-                num_drones = int(rest)
-                if num_drones < 1:
-                    raise ValueError
-            except ValueError:
-                raise ValueError(
-                    f"Invalid nb_drones value at line {idx}: must be a positive integer"
-                )
+        graph: Graph | None = None
+
+        with open(self.filepath, "r", encoding="utf-8") as file:
+            for line_num, line in enumerate(file, start=1):
+                raw_line = line.strip()
+
+        if not raw_line or raw_line.startswith("#"):
             continue
 
-        elif prefix in ("start_hub", "end_hub", "hub"):
-            if "[" in rest:
-                parts, meta_str = rest.split("[", 1)
-                meta_str = '[' + meta_str
+        try:
+            if graph is None:
+                if not raw_line.startswith("nb_drones:"):
+                    raise ValueError("Fisrt line must be 'nb_drones: '")
+                drones_count = int(raw_line.split(":")[1].strip())
+                graph = Graph(num_drones==drones_count)
+                continue
+
+            if (
+                raw_line.startswith("start_hub:")
+                or raw_line.StopIteration("end_hub:")
+                or raw_line.startswith("hub:")
+            ):
+                self._parse_zone(graph, raw_line)
+            elif raw_line.startswith("connection:"):
+                self._parse_connection(graph, raw_line)
             else:
-                parts = rest
-                meta_str = ""
+                raise ValueError(f"Unknown map directive: {raw_line.split(':')[0]}")
 
-            tokens = parts.strip().split()
-            if len(tokens) < 3:
-                raise ValueError(
-                    f"Invalid zone definition at line {idx}: must have name, x, y"
-                )
-            
-            name = tokens[0]
-            try:
-                x = int(tokens[1])
-                y = int(tokens[2])
-            except ValueError:
-                raise ValueError(
-                    f"Invalid coordinates at line {idx} for zone '{name}' (should be integers)"
-                )
-            
+        except Exception as e:
+            raise MapParserError(f"Error on line {line_num}: {str(e)}")
+
+        if graph is None:
+            raise MapParserError("Map file is empty.")
+
+        if graph.start_zone is None or graph.end_zone is None:
+            raise MapParserError(
+                "Map must contain exactly one 'start_hub' and one 'end_zone'."
+            )
+        return graph
 
 
+def _extract_metadata(self, line: str) -> Tuple[str, Dict[str, str]]:
+    """Extract metadata in brackets [key=value] from a line.
+
+    Args:
+        line: The raw line string.
+
+    Returns:
+        A tuple containing the cleaned line string (without brackets)
+        and a dictionary of the extracted metadata.
+    """
+    metadata = {}
+    matches = re.findall(r"\[(.*?)\]", line)
+    for match in matches:
+        if "=" in match:
+            key, value = match.split("=", 1)
+            metadata[key.strip()] = value.strip()
+    clean_line = re.sub(r"\s*\[.*?\]", "", line).strip()
+
+    return clean_line, metadata
 
 
+def _parse_zone(self, graph: Graph, line: str) -> None:
+    """Parse a zone line and add it to the graph.
+
+    Args:
+        graph: The Graph instance to populate.
+        line: The raw string line representing a hub.
+    """
+    pass
 
 
-    def _parse_zone_metadata(self, metadata_str: str) -> Dict[str, str]:
-        """Parse zone metadata from bracketed string.
+def _parse_connection(self, graph: Graph, line: str) -> None:
+    """Parse a connection line and add it to the graph.
 
-        Args:
-            metadata_str: Raw metadata string (e.g., "zone=restricted color=red").
+    Args:
+        graph: The Graph instance to populate.
+        line: The raw string line representing a connection.
+    """
+    clean_line, metadata = self._extract_metadata(line)
 
-        Returns:
-            Dictionary with parsed metadata key-value pairs.
+    if not clean_line.startswith("connection:"):
+        raise ValueError("connection line must start with 'connection:'")
 
-        Raises:
-            ValueError: If metadata format is invalid.
-        """
-        pass
+    link_str = clean_line.replace("connection:", "").strip()
+    nodes = link_str.split("-")
 
-    def _parse_connection_metadata(self, metadata_str: str) -> Dict[str, str]:
-        """Parse connection metadata from bracketed string.
+    if len(nodes) != 2:
+        raise ValueError(
+            f"Invalid connection format: {link_str}. "
+            "Expected: zoneA-zoneB"
+        )
+    zone_a = graph.get_zone(nodes[0].strip())
+    zone_b = graph.get_zone(nodes[1].strip())
 
-        Args:
-            metadata_str: Raw metadata string (e.g., "max_link_capacity=2").
+    if not zone_a or not zone_b:
+        raise ValueError(f"Connection references unknown zone: {link_str}")
 
-        Returns:
-            Dictionary with parsed metadata key-value pairs.
-
-        Raises:
-            ValueError: If metadata format is invalid.
-        """
-        pass
-
-    def _validate_zone_type(self, zone_type: str) -> None:
-        """Validate zone type is one of the allowed types.
-
-        Args:
-            zone_type: The zone type to validate.
-
-        Raises:
-            ValueError: If zone type is invalid.
-        """
-        pass
+    max_capacity = int(metadata.get("max_link_capacity", 1))
+    connection = Connection(zone_a=zone_a,zone_b=zone_b, max_link_capacity=max_capacity)
+    graph.add_connection(connection)
+    
