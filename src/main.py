@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from src.parser.map_parser import MapParser, MapParserError
+from src.pathfinder.pathfinder import Pathfinder, PathNotFound
 
 
 def main() -> int:
@@ -35,9 +36,12 @@ def main() -> int:
                 f"Routing {graph.num_drones} drones from '{graph.start_zone.name}' "
                 f"to '{graph.end_zone.name}'...\n")
 
-        # 2. Pathfinding (To be implemented)
-        # pathfinder = Pathfinder(graph)
-        # paths = pathfinder.find_optimal_paths()
+        pathfinder = Pathfinder(graph)
+        optimal_path = pathfinder.find_shortest_path()
+
+        path_names = [zone.name for zone in optimal_path]
+        print(f"Optimal path found: {' ->'.join(path_names)}")
+        print(f"Total steps: {len(optimal_path)} zone\n")
 
         # 3. Simulation (To be implemented)
         # simulator = Simulator(graph, paths)
@@ -47,6 +51,10 @@ def main() -> int:
 
     except MapParserError as e:
         print(f"Error parsing map: {e}")
+        return 1
+
+    except PathNotFound as e:
+        print(f"Routing Error {e}")
         return 1
 
     except Exception as e:
