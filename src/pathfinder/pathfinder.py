@@ -1,122 +1,67 @@
-"""Pathfinding algorithm for drone route optimization.
+"""Pathfinder algorithm module for the Fly-in simulation."""
 
-Implements algorithms to find optimal paths for all drones while
-respecting zone types, capacity constraints, and minimizing total turns.
-"""
+from collections import deque
+from typing import List
 
-from typing import List, Dict, Optional, Tuple
 from src.model.graph import Graph
-from src.model.drone import Drone
 from src.model.zone import Zone
 
 
-class PathFinder:
-    """Finds optimal paths for drones through the network.
+class PathNotFound(Exception):
+    """Exception raised when no valid path exists between start and end zones."""
+    pass
 
-    Uses pathfinding algorithms to compute routes that minimize total
-    simulation turns while respecting all constraints.
+
+class Pathfinder:
+    """Calculates optimal routes for drones within the network graph.
 
     Attributes:
-        graph (Graph): The network graph.
-        drones (List[Drone]): All drones to route.
+        graph (Graph): The network graph containing zones and connections.
     """
 
-    def __init__(self, graph: Graph, drones: List[Drone]) -> None:
-        """Initialize the PathFinder.
+    def __init__(self, graph: Graph) -> None:
+        """Initialize the Pathfinder with a network graph.
 
         Args:
-            graph: The network graph.
-            drones: List of drones to find paths for.
+            graph: The fully populated Graph object.
         """
-        pass
+        self.graph = graph
 
-    def find_all_paths(self) -> Dict[Drone, List[Zone]]:
-        """Find optimal paths for all drones.
+    def find_shortest_path(self) -> List[Zone]:
+        """Find the shortest path in terms of zone count using Breadth-First Search (BFS).
 
         Returns:
-            Dictionary mapping each drone to its planned path.
+            A list of Zones representing the path from start_hub to end_hub.
 
         Raises:
-            ValueError: If a path cannot be found for any drone.
+            ValueError: If the graph is missing start or end zones.
+            PathNotFound: If the graph is disconnected and no path can be found.
         """
-        pass
+        if not self.graph.start_zone or not self.graph.end_zone:
+            raise ValueError(
+                "Graph must have both a start and an end zone to calculate paths."
+            )
 
-    def find_shortest_path(
-        self,
-        start: Zone,
-        end: Zone,
-    ) -> Optional[List[Zone]]:
-        """Find the shortest path between two zones using BFS.
+        start = self.graph.start_zone
+        goal = self.graph.end_zone
 
-        Args:
-            start: Starting zone.
-            end: Ending zone.
+        initial_path: List[Zone] = [start]
+        initial_state: tuple[Zone, List[Zone]] = (start, initial_path)
+        queue: deque[tuple[Zone, List[Zone]]] = deque()
+        queue.append(initial_state)
+        visited: set[Zone] = {start}
 
-        Returns:
-            List of zones forming the shortest path, or None if
-            no path exists.
-        """
-        pass
+        while queue:
+            current_zone, current_path = queue.popleft()
 
-    def find_shortest_path_with_costs(
-        self,
-        start: Zone,
-        end: Zone,
-    ) -> Optional[List[Zone]]:
-        """Find the path with minimum total movement cost.
+            if current_zone == goal:
+                return current_path
 
-        Accounts for zone type costs (normal=1, restricted=2, etc.).
+            for neighbor in self.graph.get_neighbors(current_zone):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, current_path + [neighbor]))
 
-        Args:
-            start: Starting zone.
-            end: Ending zone.
-
-        Returns:
-            List of zones forming the lowest-cost path, or None if
-            no path exists.
-        """
-        pass
-
-    def _bfs_path(
-        self,
-        start: Zone,
-        end: Zone,
-    ) -> Optional[List[Zone]]:
-        """Internal BFS implementation for pathfinding.
-
-        Args:
-            start: Starting zone.
-            end: Ending zone.
-
-        Returns:
-            List of zones forming a path, or None if no path exists.
-        """
-        pass
-
-    def _dijkstra_path(
-        self,
-        start: Zone,
-        end: Zone,
-    ) -> Optional[List[Zone]]:
-        """Internal Dijkstra implementation for cost-aware pathfinding.
-
-        Args:
-            start: Starting zone.
-            end: Ending zone.
-
-        Returns:
-            List of zones forming the lowest-cost path, or None if
-            no path exists.
-        """
-        pass
-
-    def calculate_path_cost(self, path: List[Zone]) -> int:
-        """Calculate the total cost (in turns) for a path.
-
-        Args:
-            path: List of zones forming the path.
-
-        Returns:
-            Total number of turns to traverse the path.
-        """
-        pass
+        raise PathNotFound(
+            f"No valid path exists from {start.name} to {goal.name}."
+        )
