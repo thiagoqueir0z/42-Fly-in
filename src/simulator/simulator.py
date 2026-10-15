@@ -1,94 +1,164 @@
-"""Simulation engine for the drone routing system.
+"""Simulation engine for routing drones through the network."""
 
-Handles turn-by-turn execution of drone movements, validating all
-constraints and tracking simulation state.
-"""
+from typing import Dict, List, Set
 
-from typing import List, Dict, Tuple
-from src.model.graph import Graph
+from src.model.connection import Connection
 from src.model.drone import Drone
+from src.model.graph import Graph
 from src.model.zone import Zone
-from src.simulator.movement_validator import MovementValidator
+from src.pathfinder.pathfinder import Pathfinder
 
 
 class Simulator:
-    """Manages the simulation of drone movements through the network.
+    """Executes the turn-by-turn simulation of the drone fleet.
+
+    The simulator manages time (turns), coordinates drone movements,
+    enforces capacity constraints, and generates the strict output format.
 
     Attributes:
-        graph (Graph): The network graph.
-        drones (List[Drone]): All drones in the simulation.
-        current_turn (int): Current simulation turn.
-        simulation_log (List[str]): Log of all movements.
-        zone_occupancy (Dict[Zone, int]): Current drone count per zone.
+        graph (Graph): The network topology.
+        drones (List[Drone]): The fleet of delivery drones.
+        turn_count (int): The current simulation turn.
     """
 
-    def __init__(self, graph: Graph, drones: List[Drone]) -> None:
+    def __init__(self, graph: Graph) -> None:
         """Initialize the Simulator.
 
         Args:
-            graph: The network graph.
-            drones: List of drones to simulate.
+            graph: The populated network graph.
         """
-        pass
+        self.graph = graph
+        self.turn_count = 0
+        self.drones: List[Drone] = []
+        self._initialize_fleet()
 
-    def run(self) -> List[str]:
-        """Execute the complete simulation.
+    def _initialize_fleet(self) -> None:
+        """Instantiate drones and assign their initial paths."""
+        if not self.graph.start_zone:
+            raise ValueError("Cannot initialize fleet: Graph has no start zone.")
 
-        Returns:
-            List of strings, each representing one turn's movements.
+        pathfinder = Pathfinder(self.graph)
+        optimal_path = pathfinder.find_shortest_path()
 
-        Raises:
-            RuntimeError: If simulation encounters an unrecoverable error.
-        """
-        pass
+        for i in range(1, self.graph.num_drones + 1):
+            drone = Drone(drone_id=i, current_zone=self.graph.start_zone)
+            drone.set_path(optimal_path)
+            drone.path_index = 1
+            self.drones.append(drone)
 
-    def _simulate_turn(self) -> List[str]:
-        """Execute a single simulation turn.
+    def is_simulation_complete(self) -> bool:
+        """Check if all drones have reached the end hub."""
+        return all(drone.delivered for drone in self.drones)
 
-        Returns:
-            List of movements that occurred this turn.
-        """
-        pass
+    def run(self) -> None:
+        """Run the simulation loop until all drones are delivered."""
+        while not self.is_simulation_complete():
+            self.turn_count += 1
+            self._simulate_turn()
 
-    def _get_drone_moves(self) -> Dict[Drone, Zone | None]:
-        """Determine which drones move and to where in this turn.
+            if self.turn_count > 10000:
+                print("\n[ERROR] Simulation aborted: Exceeded 10000 turns (Deadlock suspected).")
+                break
 
-        Returns:
-            Dictionary mapping drones to their destination zones.
-        """
-        pass
+    def _simulate_turn(self) -> None:
+        """Process a single discrete time step for all drones."""
+        turn_moves: List[str] = []
+        drones_acted_this_turn: Set[int] = set()
+        turn_connection_usage: Dict[Connection, int] = {}
 
-    def _execute_moves(self, moves: Dict[Drone, Zone | None]) -> List[str]:
-        """Execute the determined moves and update state.
+        for drone in self.drones:
+            if drone.target_zone and drone.turns_in_transit > 0:
+                drone.turns_in_transit -= 1
+                drones_acted_this_turn.add(drone.drone_id)
 
-        Args:
-            moves: Dictionary mapping drones to destinations.
+                if drone.turns_in_transit == 0:
+                    drone.advance_to_zone(drone.target_zone)
 
-        Returns:
-            List of formatted movement strings for this turn.
-        """
-        pass
+        progress_made = True
+        while progress_made:
+            progress_made = False
+            for drone in self.drones:
+                if drone.delivered or drone.drone_id in drones_acted_this_turn:
+                    continue
 
-    def _all_drones_delivered(self) -> bool:
-        """Check if all drones have reached the end zone.
+                next_zone = drone.get_next_destination()
+                if not next_zone:
+                    continue
 
-        Returns:
-            True if all drones delivered, False otherwise.
-        """
-        pass
+                connection = self.graph.get_connection(drone.current_zone, next_zone)
+                if not connection:
+                    continue
 
-    def get_simulation_log(self) -> List[str]:
-        """Get the complete simulation log.
+                if self._can_move(drone, next_zone, connection, turn_connection_usage):
+                    self._execute_move(drone, next_zone, connection, turn_connection_usage)
+                    turn_moves.append(f"{drone.name}-{next_zone.name}")
+                    drones_acted_this_turn.add(drone.drone_id)
+                    progress_made = True
 
-        Returns:
-            List of formatted movement strings from the simulation.
-        """
-        pass
+        if turn_moves:
+            print(" ".join(turn_moves))
 
-    def get_total_turns(self) -> int:
-        """Get the total number of simulation turns.
+    def _can_move(
+        self,
+        drone: Drone,
+        next_zone: Zone,
+        connection: Connection,
+        turn_connection_usage: Dict[Connection, int]
+    ) -> bool:
+        """Evaluate physical constraints before allowing a move."""
+        zone_occ = self._get_zone_occupancy(next_zone)
+        if not next_zone.can_accommodate_drone(zone_occ):
+            return False
 
-        Returns:
-            The number of turns from start to completion.
-        """
-        pass
+        connection_occ = (
+            self._get_connection_occupancy(connection) + turn_connection_usage.get(connection, 0)
+        )
+        if not connection.can_accommodate_drone(connection_occ):
+            return False
+
+        return True
+
+    def _execute_move(
+        self,
+        drone: Drone,
+        next_zone: Zone,
+        connection: Connection,
+        turn_connection_usage: Dict[Connection, int]
+    ) -> None:
+        """Execute the transition and update state trackers."""
+        turn_connection_usage[connection] = turn_connection_usage.get(connection, 0) + 1
+
+        cost = next_zone.get_movement_cost()
+        if cost > 1:
+            drone.begin_transit(next_zone, cost - 1)
+        else:
+            drone.advance_to_zone(next_zone)
+
+    def _get_zone_occupancy(self, zone: Zone) -> int:
+        """Calculate how many drones are physically in or heading to a zone."""
+        if zone.is_start or zone.is_end:
+            return 0
+
+        count = 0
+        for d in self.drones:
+            if d.delivered:
+                continue
+            if d.target_zone == zone:
+                count += 1
+            elif d.current_zone == zone and d.target_zone is None:
+                count += 1
+
+        return count
+
+    def _get_connection_occupancy(self, connection: Connection) -> int:
+        """Calculate how many drones are currently stuck in transit on a connection."""
+        count = 0
+        for d in self.drones:
+            if d.delivered:
+                continue
+            if d.target_zone:
+                conn = self.graph.get_connection(d.current_zone, d.target_zone)
+                if conn == connection:
+                    count += 1
+
+        return count
