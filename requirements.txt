@@ -2,3 +2,4 @@ flake8==7.0.0
 mypy==1.8.0
 pytest==7.4.4
 colorama==0.4.6
+matplotlib
