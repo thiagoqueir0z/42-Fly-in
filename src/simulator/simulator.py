@@ -91,7 +91,8 @@ class Simulator:
 
                 if self._can_move(drone, next_zone, connection, turn_connection_usage):
                     self._execute_move(drone, next_zone, connection, turn_connection_usage)
-                    turn_moves.append(f"{drone.name}-{next_zone.name}")
+                    colored_move = self._format_colored_move(drone.name, next_zone.name, next_zone)
+                    turn_moves.append(colored_move)
                     drones_acted_this_turn.add(drone.drone_id)
                     progress_made = True
 
@@ -162,3 +163,33 @@ class Simulator:
                     count += 1
 
         return count
+
+    def _format_colored_move(self, drone_name: str, target_name: str, zone: Zone) -> str:
+        """Format the movement string with ANSI color codes for terminal output."""
+        reset = "\033[0m"
+
+        colors = {
+            "red": "\033[91m",
+            "green": "\033[92m",
+            "blue": "\033[94m",
+            "yellow": "\033[93m",
+            "orange": "\033[33m",
+            "gray": "\033[90m",
+            "black": "\033[30m",
+            "lightblue": "\033[96m"
+        }
+
+        if zone.color and zone.color.lower() in colors:
+            color_code = colors[zone.color.lower()]
+        elif zone.is_start:
+            color_code = colors["green"]
+        elif zone.is_end:
+            color_code = colors["yellow"]
+        elif zone.zone_type.name == "RESTRICTED":
+            color_code = colors["red"]
+        elif zone.zone_type.name == "PRIORITY":
+            color_code = colors["orange"]
+        else:
+            color_code = colors["lightblue"]
+
+        return f"{drone_name}-{color_code}{target_name}-{reset}"
