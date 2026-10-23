@@ -5,6 +5,8 @@ from pathlib import Path
 
 from src.parser.map_parser import MapParser, MapParserError
 from src.pathfinder.pathfinder import Pathfinder, PathNotFound
+from src.simulator.simulator import Simulator
+from src.visualizer.visualizer import NetworkVisualizer
 
 
 def main() -> int:
@@ -23,7 +25,6 @@ def main() -> int:
     map_path = Path(sys.argv[1])
 
     try:
-
         parser = MapParser(map_path)
         graph = parser.parse()
 
@@ -43,11 +44,11 @@ def main() -> int:
         print(f"Optimal path found: {' ->'.join(path_names)}")
         print(f"Total steps: {len(optimal_path)} zone\n")
 
-        # 3. Simulation (To be implemented)
-        # simulator = Simulator(graph, paths)
-        # simulator.run()
+        visualizer = NetworkVisualizer(graph)
+        visualizer.show_static_map()
 
-        return 0
+        simulator = Simulator(graph)
+        simulator.run()
 
     except MapParserError as e:
         print(f"Error parsing map: {e}")
