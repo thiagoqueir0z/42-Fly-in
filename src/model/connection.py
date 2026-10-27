@@ -1,4 +1,4 @@
-"""Connection class representing edges between zones."""
+"""Domain model for bidirectional connections between zones."""
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
@@ -7,83 +7,75 @@ if TYPE_CHECKING:
     from src.model.zone import Zone
 
 
-@dataclass
+@dataclass(eq=False)
 class Connection:
-    """Represents a bidirectional connection between two zones.
-
-    A connection is an edge in the graph allowing drone movement between
-    zones. It can have capacity constraints limiting simultaneous traversal.
-
-    Attributes:
-        zone_a (Zone): First zone in the connection.
-        zone_b (Zone): Second zone in the connection.
-        max_link_capacity (int): Max drones traversing simultaneously.
-    """
+    """Represent a bidirectional connection between two zones."""
 
     zone_a: "Zone"
     zone_b: "Zone"
     max_link_capacity: int = 1
 
     def __post_init__(self) -> None:
-        """Validate attributes after dataclass initialization."""
+        """Validate the connection configuration."""
         if self.max_link_capacity < 1:
             raise ValueError(
-                f"max_link_capacity must be at least 1. got {self.max_link_capacity}"
+                "max_link_capacity must be positive, "
+                f"got {self.max_link_capacity}."
             )
+
         if self.zone_a == self.zone_b:
             raise ValueError(
-                f"Connection cannot link a zone to itself: {self.zone_a.name}"
+                f"Connection cannot link a zone to itself: {self.zone_a.name}."
             )
 
     def connects(self, zone_1: "Zone", zone_2: "Zone") -> bool:
-        """Check if this connection links the two given zones."""
-        return (self.zone_a == zone_1 and self.zone_b == zone_2) or \
-            (self.zone_a == zone_2 and self.zone_b == zone_1)
+        """Return whether this connection links the two given zones."""
+        return (
+            (self.zone_a == zone_1 and self.zone_b == zone_2)
+            or (self.zone_a == zone_2 and self.zone_b == zone_1)
+        )
 
     def get_neighbor(self, zone: "Zone") -> Optional["Zone"]:
-        """Get the neighbor zone on the other end of this connection.
+        """Return the zone on the opposite end of the connection.
 
         Args:
-            zone: The starting zone.
+            zone: Zone from which the neighbor is requested.
 
         Returns:
-            The connected zone, or None if the given zone is not part
-            of this connection.
+            The opposite zone, or None when the given zone is not connected.
         """
         if zone == self.zone_a:
             return self.zone_b
+
         if zone == self.zone_b:
             return self.zone_a
+
         return None
 
     def can_accommodate_drone(self, drones_in_transit: int) -> bool:
-        """Check if the connection can accommodate another drone.
+        """Return whether another drone can use this connection.
 
         Args:
-            drones_in_transit: Current number of drones using this connection.
+            drones_in_transit: Number of drones currently using the link.
 
         Returns:
-            True if capacity allows, False otherwise.
+            True when the connection still has capacity.
+
+        Raises:
+            ValueError: If the occupancy is negative.
         """
+        if drones_in_transit < 0:
+            raise ValueError("drones_in_transit cannot be negative.")
+
         return drones_in_transit < self.max_link_capacity
 
     def __hash__(self) -> int:
-        """Return hash of the connection.
-
-        Returns:
-            Hash value based on both zones.
-        """
-        return hash(frozenset([self.zone_a.name, self.zone_b.name]))
+        """Return a hash based on the two endpoint names."""
+        return hash(frozenset((self.zone_a.name, self.zone_b.name)))
 
     def __eq__(self, other: object) -> bool:
-        """Check equality with another connection.
-
-        Args:
-            other: Object to compare with.
-
-        Returns:
-            True if both connections link the same zones.
-        """
+        """Compare connections without considering endpoint order."""
         if not isinstance(other, Connection):
             return NotImplemented
+
         return self.connects(other.zone_a, other.zone_b)
