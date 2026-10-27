@@ -1,7 +1,9 @@
-"""Drone class representing autonomous delivery units."""
+"""Domain model for autonomous drones."""
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional, List
+from typing import TYPE_CHECKING
+
+from src.model.zone import ZoneType
 
 if TYPE_CHECKING:
     from src.model.zone import Zone
@@ -9,95 +11,146 @@ if TYPE_CHECKING:
 
 @dataclass(eq=False)
 class Drone:
-    """Represents an autonomous drone in the network.
+    """Represent a drone moving through the network."""
 
-    A drone has a unique ID, current position, and a path to follow.
-    It can move between connected zones and has state tracking for
-    simulation purposes.
-
-    Attributes:
-        drone_id (int): Unique identifier for the drone.
-        current_zone (Zone): Current zone of the drone.
-        path (List[Zone]): Planned path from start to end.
-        delivered (bool): Whether the drone has reached the end zone.
-        turns_in_transit (int): Turns remaining if in restricted zone transit.
-    """
     drone_id: int
     current_zone: "Zone"
-    path: List["Zone"] = field(default_factory=list)
+    path: list["Zone"] = field(default_factory=list)
     delivered: bool = field(default=False, init=False)
     turns_in_transit: int = field(default=0, init=False)
-    target_zone: Optional["Zone"] = field(default=None, init=False)
+    target_zone: "Zone | None" = field(default=None, init=False)
     path_index: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
-        """Validate attributes after dataclass initialization."""
+        """Validate the drone configuration."""
         if self.drone_id < 1:
-            raise ValueError(f"drone_id must be a positive integer, got {self.drone_id}")
+            raise ValueError(
+                f"drone_id must be positive, got {self.drone_id}."
+            )
 
     @property
     def name(self) -> str:
-        """Return the formatted drone ID as required by the simulation output.
-
-        Returns:
-            String in format 'D' (e.g., 'D1', 'D2').
-        """
+        """Return the formatted drone identifier."""
         return f"D{self.drone_id}"
 
-    def set_path(self, new_path: List["Zone"]) -> None:
-        """Set or update the planned path for this drone.
+    @property
+    def is_in_transit(self) -> bool:
+        """Return whether the drone is between two zones."""
+        return self.target_zone is not None
+
+    def set_path(self, new_path: list["Zone"]) -> None:
+        """Assign a path starting at the drone's current zone.
 
         Args:
-            new_path: List of zones representing the path from start to end.
+            new_path: Ordered list of zones from the current position to
+                the destination.
 
         Raises:
-            ValueError: If path is empty.
+            ValueError: If the path is invalid or starts at another zone.
         """
         if not new_path:
             raise ValueError(f"Path for {self.name} cannot be empty.")
-        self.path = new_path
-        self.path_index = 0
 
-    def get_next_destination(self) -> Optional["Zone"]:
-        """Get the next zone in the planned path without moving.
+        if new_path[0] != self.current_zone:
+            raise ValueError(
+                f"Path for {self.name} must start at "
+                f"'{self.current_zone.name}'."
+            )
+
+        if any(zone.zone_type == ZoneType.BLOCKED for zone in new_path):
+            raise ValueError(
+                f"Path for {self.name} cannot contain blocked zones."
+            )
+
+        self.path = list(new_path)
+        self.path_index = 0
+        self.delivered = self.current_zone.is_end
+
+    def get_next_destination(self) -> "Zone | None":
+        """Return the next zone in the path.
 
         Returns:
-            The next zone to visit, or None if path is complete.
+            The next zone, or None when the path is complete.
         """
-        if self.path_index < len(self.path):
-            return self.path[self.path_index]
-        return None
+        next_index = self.path_index + 1
+
+        if next_index >= len(self.path):
+            return None
+
+        return self.path[next_index]
 
     def advance_to_zone(self, zone: "Zone") -> None:
-        """Instantly move the drone to a new zone and update its path progress.
+        """Move the drone to the next zone in its path.
 
         Args:
-            zone: The destination zone.
+            zone: Destination zone.
+
+        Raises:
+            ValueError: If the zone is not the next planned destination.
         """
+        next_zone = self.get_next_destination()
+        valid_transit_arrival = self.is_in_transit and zone == self.target_zone
+
+        if not valid_transit_arrival and next_zone != zone:
+            expected = next_zone.name if next_zone else "no zone"
+            raise ValueError(
+                f"Invalid destination for {self.name}: "
+                f"expected '{expected}', got '{zone.name}'."
+            )
+
         self.current_zone = zone
+        self.path_index += 1
         self.target_zone = None
         self.turns_in_transit = 0
-        if self.get_next_destination() == zone:
-            self.path_index += 1
+
         if zone.is_end:
             self.delivered = True
 
     def begin_transit(self, target: "Zone", turns: int) -> None:
-        """Put the drone in a transit state towards a zone requiring multiple turns.
+        """Start a multi-turn movement toward a restricted zone.
 
         Args:
-            target: The destination zone it is traveling towards.
-            turns: How many turns the transit will take.
+            target: Destination zone.
+            turns: Number of turns remaining before arrival.
+
+        Raises:
+            ValueError: If the transit configuration is invalid.
         """
+        if self.is_in_transit:
+            raise ValueError(f"{self.name} is already in transit.")
+
+        if turns < 1:
+            raise ValueError(
+                f"Transit duration must be positive, got {turns}."
+            )
+
+        if target == self.current_zone:
+            raise ValueError(
+                f"{self.name} cannot transit to its current zone."
+            )
+
+        if target.zone_type == ZoneType.BLOCKED:
+            raise ValueError(
+                f"{self.name} cannot transit to blocked zone "
+                f"'{target.name}'."
+            )
+
+        if target != self.get_next_destination():
+            raise ValueError(
+                f"'{target.name}' is not the next destination for "
+                f"{self.name}."
+            )
+
         self.target_zone = target
         self.turns_in_transit = turns
 
     def __hash__(self) -> int:
-        """Return hash of the drone based on its immutable ID."""
+        """Return a hash based on the drone identifier."""
         return hash(self.drone_id)
 
     def __eq__(self, other: object) -> bool:
-        """Check equality with another drone based on ID."""
+        """Compare drones by their identifiers."""
         if not isinstance(other, Drone):
             return NotImplemented
+
         return self.drone_id == other.drone_id

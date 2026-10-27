@@ -44,7 +44,6 @@ class Simulator:
             drone_id_str = f"D{i}"
             if drone_id_str in all_routes:
                 drone.set_path(all_routes[drone_id_str])
-                drone.path_index = 1
 
             self.drones.append(drone)
 
