@@ -87,8 +87,6 @@ class Simulator:
                 continue
 
             if next_zone == drone.current_zone:
-                # A repeated zone in a planned path represents one wait.
-                drone.path_index += 1
                 acted.add(drone.drone_id)
                 continue
 
