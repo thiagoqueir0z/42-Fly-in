@@ -166,12 +166,7 @@ class Simulator:
             drone.begin_transit(next_zone, cost - 1)
 
     def _get_zone_occupancy(self, zone: Zone) -> int:
-        """Count drones physically occupying a zone.
-
-        A drone crossing a restricted connection occupies the connection,
-        not its origin or destination zone. Its ``current_zone`` remains the
-        origin only as a reference for finding the active connection.
-        """
+        """Count drones occupying or entering a zone."""
         if zone.is_start or zone.is_end:
             return 0
 
@@ -179,8 +174,10 @@ class Simulator:
             1
             for drone in self.drones
             if not drone.delivered
-            and not drone.is_in_transit
-            and drone.current_zone == zone
+            and (
+                drone.current_zone == zone
+                or drone.target_zone == zone
+            )
         )
 
     def _get_connection_occupancy(self, connection: Connection) -> int:
