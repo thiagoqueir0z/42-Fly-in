@@ -94,11 +94,13 @@ class MapParser:
         metadata = {}
         matches = re.findall(r"\[(.*?)\]", line)
         for match in matches:
-            if "=" in match:
-                key, value = match.split("=", 1)
-                metadata[key.strip()] = value.strip()
-        clean_line = re.sub(r"\s*\[.*?\]", "", line).strip()
+            pairs = match.split()
+            for pair in pairs:
+                if "=" in pair:
+                    key, value = pair.split("=", 1)
+                    metadata[key.strip()] = value.strip()
 
+        clean_line = re.sub(r"\s*\[.*?\]", "", line).strip()
         return clean_line, metadata
 
     def _parse_zone(self, graph: Graph, line: str) -> None:
@@ -141,22 +143,11 @@ class MapParser:
             zone_type=zone_type,
             color=color,
             max_drones=max_drones,
+            is_start=is_start,
+            is_end=is_end
         )
 
         graph.add_zone(zone)
-
-        if is_start:
-            if graph.start_zone is not None:
-                raise ValueError(
-                    "Map cannot have more than one 'start_hub'."
-                )
-            graph.start_zone = zone
-        if is_end:
-            if graph.end_zone is not None:
-                raise ValueError(
-                    "Map cannot have more than one 'end_hub'."
-                )
-            graph.end_zone = zone
 
     def _parse_connection(self, graph: Graph, line: str) -> None:
         """Parse a connection line and add it to the graph.

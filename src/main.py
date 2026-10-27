@@ -38,17 +38,18 @@ def main() -> int:
                 f"to '{graph.end_zone.name}'...\n")
 
         pathfinder = Pathfinder(graph)
-        optimal_path = pathfinder.find_shortest_path()
+        all_routes = pathfinder.plan_all_routes()
 
-        path_names = [zone.name for zone in optimal_path]
-        print(f"Optimal path found: {' ->'.join(path_names)}")
-        print(f"Total steps: {len(optimal_path)} zone\n")
-
-        visualizer = NetworkVisualizer(graph)
-        visualizer.show_static_map()
+        for drone, path in all_routes.items():
+            print(f"{drone} route ({len(path)} steps): {' -> '.join(z.name for z in path)}")
 
         simulator = Simulator(graph)
-        simulator.run()
+        simulator.run(all_routes)
+
+        visualizer = NetworkVisualizer(graph)
+        visualizer.animate_simulation(simulator.history)
+
+        return 0
 
     except MapParserError as e:
         print(f"Error parsing map: {e}")

@@ -3,6 +3,8 @@ SRC_DIR := src
 MAIN := $(SRC_DIR)/main.py
 MAP ?= maps/easy/01_linear_path.txt
 VENV := venv
+MAP_ARG = $(filter-out $@,$(MAKECMDGOALS))
+CURRENT_MAP = $(if $(MAP_ARG),$(MAP_ARG),$(MAP))
 
 .PHONY: install run run-map debug clean lint lint-strict help venv
 
@@ -28,14 +30,17 @@ install:
 	$(PYTHON) -m pip install -r requirements.txt
 
 run:
-	$(PYTHON) $(MAIN) $(MAP)
+	PYTHONPATH=. $(PYTHON) $(MAIN) $(MAP)
 
 run-map:
-	@echo "Run: make run-map MAP=maps/medium/03_circular_loop.txt"
-	$(PYTHON) $(MAIN) $(MAP)
+	@echo "A executar o mapa: $(CURRENT_MAP)"
+	PYTHONPATH=. $(PYTHON) $(MAIN) $(CURRENT_MAP)
+
+%:
+	@:
 
 debug:
-	$(PYTHON) -m pdb $(MAIN) $(MAP)
+	PYTHONPATH=. $(PYTHON) -m pdb $(MAIN) $(MAP)
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
@@ -46,13 +51,13 @@ clean:
 
 lint:
 	@echo "Running flake8..."
-	flake8 .
+	flake8 $(SRC_DIR)
 	@echo "Running mypy..."
-	mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+	mypy $(SRC_DIR) --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 	@echo "✓ All checks passed!"
 
 lint-strict:
 	@echo "Running strict mode..."
-	flake8 .
-	mypy . --strict
+	flake8 $(SRC_DIR)
+	mypy $(SRC_DIR) --strict
 	@echo "✓ All strict checks passed!"

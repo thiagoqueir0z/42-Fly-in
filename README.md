@@ -15,7 +15,7 @@ The system must:
 
 ### Setup & Virtual Environment
 
-1. Create and activate the virtual environment:
+Create and activate the virtual environment:
 ```bash
 make venv
 source venv/bin/activate
@@ -66,29 +66,27 @@ make clean
 
 ```
 src/
-├── main.py                 # Entry point
+├── main.py                   # Entry point
 ├── parser/
-│   └── map_parser.py       # Parse map configuration files
+│     └── map_parser.py       # Parse map configuration files
 ├── model/
-│   ├── zone.py             # Zone representation
-│   ├── connection.py       # Connection between zones
-│   ├── drone.py            # Drone representation
-│   └── graph.py            # Complete network graph
+│     ├── zone.py             # Zone representation
+│     ├── connection.py       # Connection between zones
+│     ├── drone.py            # Drone representation
+│     └── graph.py            # Complete network graph
 ├── simulator/
-│   ├── simulator.py        # Simulation engine
-│   └── movement_validator.py  # Validate drone movements
+│     ├── simulator.py        # Simulation engine
 ├── pathfinder/
-│   └── pathfinder.py       # Pathfinding algorithms
-└── visualization/
-    └── visualizer.py       # Terminal visualization
+│     └── pathfinder.py       # Pathfinding algorithms
+└── visualizer/
+      └── visualizer.py       # Graphical map rendering & visualization
 ```
 
 ## Algorithm Overview
 
 ### Pathfinding Strategy
 
-The pathfinding system uses a combination of algorithms:
-- **BFS**: For shortest path in terms of zone count
+The pathfinding system uses:
 - **Dijkstra**: For lowest-cost paths considering zone type costs
 - **Constraint handling**: Respects zone capacity and connection limits
 
@@ -102,18 +100,18 @@ Turn-by-turn simulation respects:
 
 ### Performance Benchmarks
 
-Target performance:
-- Easy maps: < 10 turns
-- Medium maps: 10-30 turns
-- Hard maps: < 60 turns
-- Challenger map: < 45 turns (optional)
+Target performance based on optimal turns:
+- Easy maps: <4 turns
+- Medium maps: 6 to 10 turns
+- Hard maps: 13 to 26 turns
+- Challenger map: 43 turns (The Impossible Dream)
 
 ## Visualization
 
 The system provides:
-- **Terminal colors**: ANSI color codes for different zone types
-- **Turn-by-turn display**: Shows each drone movement
-- **Statistics**: Total turns, drones per turn, path efficiency
+- **Static 2D Map**: A graphical interface built with pure `matplotlib` that renders the network topology, node coordinates, and connections before the simulation begins.
+- **Terminal Colors**: ANSI color codes applied to zone names during the simulation output to instantly identify zone types (e.g., restricted=red, start=green).
+- **Turn-by-turn Display**: Shows concurrent drone movements precisely formatted per simulation turn.
 
 ## Example Input & Expected Output
 
@@ -138,8 +136,7 @@ D1-goal D2-goal
 ## Resources
 
 ### Graph Theory
-- [BFS (Breadth-First Search)](https://en.wikipedia.org/wiki/Breadth-first_search)
-- [Dijkstra's Algorithm](https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm)
+- [Dijkstra's Algorithm](https://coddy.tech/visualize/graphs/dijkstras-algorithm)
 - [Graph Theory Basics](https://www.khanacademy.org/computing/computer-science/algorithms/graph-representation/a/introduction-to-graphs)
 
 ### Python Best Practices
@@ -152,7 +149,7 @@ D1-goal D2-goal
 
 AI has been used to:
 - Provide code structure recommendations
-- Explain algorithm concepts (BFS, Dijkstra, constraint satisfaction)
+- Explain algorithm concepts (Dijkstra, constraint satisfaction)
 - Review code quality and suggest improvements
 - Generate docstring templates
 - Optimize algorithm implementations
@@ -161,10 +158,9 @@ All AI-generated code was reviewed, tested, and modified to ensure it matches pr
 
 ## Technical Choices
 
-### Why BFS + Dijkstra?
-- BFS provides fast shortest paths when cost doesn't matter
-- Dijkstra handles zone type costs (restricted=2 turns, etc.)
-- Combination allows flexible routing strategies
+### Why Dijkstra's Algorithm?
+- Evolved from a basic BFS approach to accurately evaluate movement costs based on zone types (restricted=2 turns, priority=1 turn).
+- Ensures the drone fleet dynamically avoids traffic bottlenecks, prioritizing faster topological routes over simply minimizing the number of zone hops.
 
 ### Why Object-Oriented Design?
 - Clear separation of concerns (Parser, Simulator, PathFinder)
@@ -179,9 +175,9 @@ All AI-generated code was reviewed, tested, and modified to ensure it matches pr
 ## Performance Analysis
 
 ### Time Complexity
-- Pathfinding (BFS): O(V + E) where V=zones, E=connections
+- Pathfinding (Dijkstra): O((V + E) log V) where V=zones, E=connections
 - Simulation: O(D × T × V) where D=drones, T=turns
-- Overall: O(D × T × (V + E))
+- Overall: O(((V + E) log V) + (D × T × V))
 
 ### Space Complexity
 - Graph storage: O(V + E)
@@ -192,6 +188,5 @@ All AI-generated code was reviewed, tested, and modified to ensure it matches pr
 
 - Multi-path routing for better load distribution
 - Machine learning-based path optimization
-- Graphical UI with visualization
 - Real-time simulation speed control
 - Advanced deadlock detection and resolution

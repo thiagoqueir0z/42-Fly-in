@@ -30,28 +30,36 @@ class Simulator:
         self.graph = graph
         self.turn_count = 0
         self.drones: List[Drone] = []
-        self._initialize_fleet()
+        self.history: List[Dict[str, str]] = []
 
-    def _initialize_fleet(self) -> None:
+    def _initialize_fleet(self, all_routes: Dict[str, List[Zone]]) -> None:
         """Instantiate drones and assign their initial paths."""
         if not self.graph.start_zone:
             raise ValueError("Cannot initialize fleet: Graph has no start zone.")
 
-        pathfinder = Pathfinder(self.graph)
-        optimal_path = pathfinder.find_shortest_path()
-
+        self.drones = []
         for i in range(1, self.graph.num_drones + 1):
             drone = Drone(drone_id=i, current_zone=self.graph.start_zone)
-            drone.set_path(optimal_path)
-            drone.path_index = 1
+
+            drone_id_str = f"D{i}"
+            if drone_id_str in all_routes:
+                drone.set_path(all_routes[drone_id_str])
+                drone.path_index = 1
+
             self.drones.append(drone)
 
     def is_simulation_complete(self) -> bool:
         """Check if all drones have reached the end hub."""
         return all(drone.delivered for drone in self.drones)
 
-    def run(self) -> None:
+    def run(self, all_routes: Dict[str, List[Zone]]) -> None:
         """Run the simulation loop until all drones are delivered."""
+        self.history = []
+        self._initialize_fleet(all_routes)
+
+        initial_state = {f"D{drone.drone_id}": self.graph.start_zone.name for drone in self.drones}
+        self.history.append(initial_state)
+
         while not self.is_simulation_complete():
             self.turn_count += 1
             self._simulate_turn()
@@ -73,6 +81,10 @@ class Simulator:
 
                 if drone.turns_in_transit == 0:
                     drone.advance_to_zone(drone.target_zone)
+                    colored_move = self._format_colored_move(
+                        drone.name, drone.current_zone.name, drone.current_zone
+                    )
+                    drone.current_zone.name, drone.current_zone
 
         progress_made = True
         while progress_made:
@@ -99,6 +111,9 @@ class Simulator:
         if turn_moves:
             print(" ".join(turn_moves))
 
+        turn_state = {f"D{drone.drone_id}": drone.current_zone.name for drone in self.drones}
+        self.history.append(turn_state)
+
     def _can_move(
         self,
         drone: Drone,
@@ -107,14 +122,15 @@ class Simulator:
         turn_connection_usage: Dict[Connection, int]
     ) -> bool:
         """Evaluate physical constraints before allowing a move."""
-        zone_occ = self._get_zone_occupancy(next_zone)
-        if not next_zone.can_accommodate_drone(zone_occ):
-            return False
 
         connection_occ = (
             self._get_connection_occupancy(connection) + turn_connection_usage.get(connection, 0)
         )
         if not connection.can_accommodate_drone(connection_occ):
+            return False
+
+        zone_occ = self._get_zone_occupancy(next_zone)
+        if not next_zone.can_accommodate_drone(zone_occ):
             return False
 
         return True
@@ -134,6 +150,9 @@ class Simulator:
             drone.begin_transit(next_zone, cost - 1)
         else:
             drone.advance_to_zone(next_zone)
+
+        if next_zone.is_end:
+            drone.delivered = True
 
     def _get_zone_occupancy(self, zone: Zone) -> int:
         """Calculate how many drones are physically in or heading to a zone."""
