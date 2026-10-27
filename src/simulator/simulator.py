@@ -72,11 +72,7 @@ class Simulator:
             if drone.turns_in_transit == 0:
                 target = drone.target_zone
                 drone.advance_to_zone(target)
-                turn_moves.append(
-                    self._format_colored_move(
-                        drone.name, target.name, target
-                    )
-                )
+                turn_moves.append(f"{drone.name}-{target.name}")
 
         for drone in self.drones:
             if drone.delivered or drone.drone_id in acted:
@@ -113,11 +109,7 @@ class Simulator:
                 connection,
                 connection_usage,
             )
-            turn_moves.append(
-                self._format_colored_move(
-                    drone.name, next_zone.name, next_zone
-                )
-            )
+            turn_moves.append(f"{drone.name}-{next_zone.name}")
             acted.add(drone.drone_id)
 
         if turn_moves:
@@ -198,37 +190,3 @@ class Simulator:
                 count += 1
 
         return count
-
-    def _format_colored_move(
-        self,
-        drone_name: str,
-        target_name: str,
-        zone: Zone,
-    ) -> str:
-        """Format a movement with optional terminal color."""
-        colors = {
-            "red": "\033[91m",
-            "green": "\033[92m",
-            "blue": "\033[94m",
-            "yellow": "\033[93m",
-            "orange": "\033[33m",
-            "gray": "\033[90m",
-            "black": "\033[30m",
-            "lightblue": "\033[96m",
-        }
-        reset = "\033[0m"
-
-        if zone.color and zone.color.lower() in colors:
-            color = colors[zone.color.lower()]
-        elif zone.is_start:
-            color = colors["green"]
-        elif zone.is_end:
-            color = colors["yellow"]
-        elif zone.zone_type.name == "RESTRICTED":
-            color = colors["red"]
-        elif zone.zone_type.name == "PRIORITY":
-            color = colors["orange"]
-        else:
-            color = colors["lightblue"]
-
-        return f"{drone_name}-{color}{target_name}-{reset}"
