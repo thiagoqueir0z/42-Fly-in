@@ -45,11 +45,12 @@ class Simulator:
         if self.graph.start_zone is None:
             raise ValueError("Cannot start simulation without a start zone.")
 
-        initial_state = {
-            drone.name: self.graph.start_zone.name
-            for drone in self.drones
-        }
-        self.history.append(initial_state)
+        self.history.append(
+            {
+                drone.name: self.graph.start_zone.name
+                for drone in self.drones
+            }
+        )
 
         while not self.is_simulation_complete():
             self.turn_count += 1
@@ -83,7 +84,6 @@ class Simulator:
                 continue
 
             if next_zone == drone.current_zone:
-                # A repeated zone in a planned path represents one wait.
                 drone.path_index += 1
                 acted.add(drone.drone_id)
                 continue
@@ -103,23 +103,35 @@ class Simulator:
             ):
                 continue
 
+            origin = drone.current_zone
             self._execute_move(
                 drone,
                 next_zone,
                 connection,
                 connection_usage,
             )
-            turn_moves.append(f"{drone.name}-{next_zone.name}")
+            if drone.is_in_transit:
+                turn_moves.append(
+                    f"{drone.name}-{self._connection_name(origin, next_zone)}"
+                )
+            else:
+                turn_moves.append(f"{drone.name}-{next_zone.name}")
             acted.add(drone.drone_id)
 
         if turn_moves:
             print(" ".join(turn_moves))
 
-        state = {
-            drone.name: drone.current_zone.name
-            for drone in self.drones
-        }
-        self.history.append(state)
+        self.history.append(
+            {
+                drone.name: drone.current_zone.name
+                for drone in self.drones
+            }
+        )
+
+    @staticmethod
+    def _connection_name(origin: Zone, destination: Zone) -> str:
+        """Return the output name of a connection traversal."""
+        return f"{origin.name}-{destination.name}"
 
     def _can_move(
         self,
@@ -136,8 +148,9 @@ class Simulator:
         if not connection.can_accommodate_drone(connection_occupancy):
             return False
 
-        zone_occupancy = self._get_zone_occupancy(next_zone)
-        return next_zone.can_accommodate_drone(zone_occupancy)
+        return next_zone.can_accommodate_drone(
+            self._get_zone_occupancy(next_zone)
+        )
 
     def _execute_move(
         self,
@@ -158,12 +171,7 @@ class Simulator:
             drone.begin_transit(next_zone, cost - 1)
 
     def _get_zone_occupancy(self, zone: Zone) -> int:
-        """Count drones physically occupying a zone.
-
-        A drone crossing a restricted connection occupies the connection,
-        not its origin or destination zone. Its ``current_zone`` remains the
-        origin only as a reference for finding the active connection.
-        """
+        """Count drones physically occupying a zone."""
         if zone.is_start or zone.is_end:
             return 0
 
