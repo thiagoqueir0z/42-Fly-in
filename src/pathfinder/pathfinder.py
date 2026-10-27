@@ -109,7 +109,9 @@ class Pathfinder:
                     continue
 
                 state = (next_zone, arrival)
-                score = float(arrival + self.strategic_map.get(next_zone, 10**9))
+                score = float(
+                    arrival + self.strategic_map.get(next_zone, 10**9)
+                )
                 if score >= best_cost.get(state, float("inf")):
                     continue
 
