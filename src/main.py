@@ -28,28 +28,17 @@ def main() -> int:
         parser = MapParser(map_path)
         graph = parser.parse()
 
-        print("=== Fly-in Simulation ===")
-        print(f"Map loaded successfully: {map_path.name}")
-        print(f"Zones: {len(graph.zones)} | Connections: {len(graph.connections)}")
-
-        if graph.start_zone and graph.end_zone:
-            print(
-                f"Routing {graph.num_drones} drones from '{graph.start_zone.name}' "
-                f"to '{graph.end_zone.name}'...\n")
+        print("\n=============== Fly-in Simulation ===============\n")
+        print(f"Map loaded successfully: {map_path.name}\n")
 
         pathfinder = Pathfinder(graph)
         all_routes = pathfinder.plan_all_routes()
-
-        for drone, path in all_routes.items():
-            print(f"{drone} route ({len(path)} steps): {' -> '.join(z.name for z in path)}")
 
         simulator = Simulator(graph)
         simulator.run(all_routes)
 
         visualizer = NetworkVisualizer(graph)
         visualizer.animate_simulation(simulator.history)
-
-        return 0
 
     except MapParserError as e:
         print(f"Error parsing map: {e}")
