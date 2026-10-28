@@ -9,26 +9,17 @@ if TYPE_CHECKING:
 
 @dataclass
 class Connection:
-    """Represents a bidirectional connection between two zones.
-
-    A connection is an edge in the graph allowing drone movement between
-    zones. It can have capacity constraints limiting simultaneous traversal.
-
-    Attributes:
-        zone_a (Zone): First zone in the connection.
-        zone_b (Zone): Second zone in the connection.
-        max_link_capacity (int): Max drones traversing simultaneously.
-    """
+    """Represents a bidirectional connection between two zones."""
 
     zone_a: "Zone"
     zone_b: "Zone"
     max_link_capacity: int = 1
 
     def __post_init__(self) -> None:
-        """Validate attributes after dataclass initialization."""
+        """Validate connection rules required by the subject."""
         if self.max_link_capacity < 1:
             raise ValueError(
-                f"max_link_capacity must be at least 1. got {self.max_link_capacity}"
+                f"max_link_capacity must be a positive integer. Got {self.max_link_capacity}"
             )
         if self.zone_a == self.zone_b:
             raise ValueError(
@@ -36,20 +27,12 @@ class Connection:
             )
 
     def connects(self, zone_1: "Zone", zone_2: "Zone") -> bool:
-        """Check if this connection links the two given zones."""
+        """Check if this connection links z1-z2 or z2-z1 bidirectionally."""
         return (self.zone_a == zone_1 and self.zone_b == zone_2) or \
             (self.zone_a == zone_2 and self.zone_b == zone_1)
 
     def get_neighbor(self, zone: "Zone") -> Optional["Zone"]:
-        """Get the neighbor zone on the other end of this connection.
-
-        Args:
-            zone: The starting zone.
-
-        Returns:
-            The connected zone, or None if the given zone is not part
-            of this connection.
-        """
+        """Return the zone on the other end of the connection."""
         if zone == self.zone_a:
             return self.zone_b
         if zone == self.zone_b:
@@ -57,33 +40,15 @@ class Connection:
         return None
 
     def can_accommodate_drone(self, drones_in_transit: int) -> bool:
-        """Check if the connection can accommodate another drone.
-
-        Args:
-            drones_in_transit: Current number of drones using this connection.
-
-        Returns:
-            True if capacity allows, False otherwise.
-        """
+        """Check if connection capacity allows another drone."""
         return drones_in_transit < self.max_link_capacity
 
     def __hash__(self) -> int:
-        """Return hash of the connection.
-
-        Returns:
-            Hash value based on both zones.
-        """
+        """Hash must be identical for A-B and B-A to prevent duplicates."""
         return hash(frozenset([self.zone_a.name, self.zone_b.name]))
 
     def __eq__(self, other: object) -> bool:
-        """Check equality with another connection.
-
-        Args:
-            other: Object to compare with.
-
-        Returns:
-            True if both connections link the same zones.
-        """
+        """Ensure connection A-B is treated as equal to B-A."""
         if not isinstance(other, Connection):
             return NotImplemented
         return self.connects(other.zone_a, other.zone_b)
