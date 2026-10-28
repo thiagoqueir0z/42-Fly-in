@@ -83,7 +83,7 @@ class Simulator:
                     colored_move = self._format_colored_move(
                         drone.name, drone.current_zone.name, drone.current_zone
                     )
-                    drone.current_zone.name, drone.current_zone
+                    turn_moves.append(colored_move)
 
         progress_made = True
         while progress_made:
@@ -110,7 +110,14 @@ class Simulator:
         if turn_moves:
             print(" ".join(turn_moves))
 
-        turn_state = {f"D{drone.drone_id}": drone.current_zone.name for drone in self.drones}
+        turn_state = {}
+        for drone in self.drones:
+            if drone.target_zone and drone.turns_in_transit > 0:
+                turn_state[f"D{drone.drone_id}"] = (
+                    f"{drone.current_zone.name}-{drone.target_zone.name}"
+                )
+            else:
+                turn_state[f"D{drone.drone_id}"] = drone.current_zone.name
         self.history.append(turn_state)
 
     def _can_move(
@@ -143,15 +150,12 @@ class Simulator:
     ) -> None:
         """Execute the transition and update state trackers."""
         turn_connection_usage[connection] = turn_connection_usage.get(connection, 0) + 1
-
         cost = next_zone.get_movement_cost()
+
         if cost > 1:
             drone.begin_transit(next_zone, cost - 1)
         else:
             drone.advance_to_zone(next_zone)
-
-        if next_zone.is_end:
-            drone.delivered = True
 
     def _get_zone_occupancy(self, zone: Zone) -> int:
         """Calculate how many drones are physically in or heading to a zone."""

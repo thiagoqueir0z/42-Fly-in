@@ -210,27 +210,35 @@ class NetworkVisualizer:
         SUB_STEPS = 10
         smooth_frames = []
 
+        def get_coords(z_name: str):
+            if z_name in self.graph.zones:
+                z = self.graph.zones[z_name]
+                return z.x, z.y
+            elif "-" in z_name:
+                z1, z2 = z_name.split("-")
+                if z1 in self.graph.zones and z2 in self.graph.zones:
+                    zx1, zy1 = self.graph.zones[z1].x, self.graph.zones[z1].y
+                    zx2, zy2 = self.graph.zones[z2].x, self.graph.zones[z2].y
+                    return (zx1 + zx2) / 2, (zy1 + zy2) / 2
+            return None
+
         for i in range(len(simulation_steps)):
             curr_state = simulation_steps[i]
             prev_state = simulation_steps[i - 1] if i > 0 else curr_state
 
             for step in range(SUB_STEPS):
                 alpha = min(1.0, (step / (SUB_STEPS * 0.6)))
-
                 raw_positions = {}
+
                 for drone_id, curr_zone_name in curr_state.items():
                     prev_zone_name = prev_state.get(drone_id, curr_zone_name)
 
-                    if curr_zone_name in self.graph.zones and prev_zone_name in self.graph.zones:
-                        z_curr = self.graph.zones[curr_zone_name]
-                        z_prev = self.graph.zones[prev_zone_name]
+                    c_coords = get_coords(curr_zone_name)
+                    p_coords = get_coords(prev_zone_name)
 
-                        if prev_zone_name == curr_zone_name:
-                            x, y = z_curr.x, z_curr.y
-                        else:
-                            x = z_prev.x + (z_curr.x - z_prev.x) * alpha
-                            y = z_prev.y + (z_curr.y - z_prev.y) * alpha
-
+                    if c_coords and p_coords:
+                        x = p_coords[0] + (c_coords[0] - p_coords[0]) * alpha
+                        y = p_coords[1] + (c_coords[1] - p_coords[1]) * alpha
                         raw_positions[drone_id] = (round(x, 4), round(y, 4))
 
                 interpolated_state = {}
