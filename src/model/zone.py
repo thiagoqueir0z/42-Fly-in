@@ -1,4 +1,4 @@
-"""Domain model for a zone in the drone network."""
+"""Zone class representing locations in the drone network."""
 
 from dataclasses import dataclass
 from enum import Enum
@@ -6,17 +6,31 @@ from typing import Optional
 
 
 class ZoneType(Enum):
-    """Types of zones supported by the simulation."""
-
+    """Enumeration of valid zone types in the drone network."""
     NORMAL = "normal"
     PRIORITY = "priority"
     RESTRICTED = "restricted"
     BLOCKED = "blocked"
 
 
-@dataclass(eq=False)
+@dataclass
 class Zone:
-    """Represent a location where drones can be placed."""
+    """Represents a zone in the drone network.
+
+    A zone is a location where drones can be positioned. Each zone has
+    a position, a type (normal, restricted, priority, blocked), and
+    capacity constraints.
+
+    Attributes:
+        name (str): Unique identifier for the zone.
+        x (int): X coordinate of the zone.
+        y (int): Y coordinate of the zone.
+        zone_type (ZoneType): Type of zone (normal, restricted, priority, blocked).
+        color (Optional[str]): Optional color for visualization.
+        max_drones (int): Maximum number of drones in this zone simultaneously.
+        is_start (bool): Whether this is the starting zone.
+        is_end (bool): Whether this is the ending zone.
+    """
 
     name: str
     x: int
@@ -28,62 +42,43 @@ class Zone:
     is_end: bool = False
 
     def __post_init__(self) -> None:
-        """Validate the basic invariants of the zone."""
-        if not self.name:
-            raise ValueError("Zone name cannot be empty.")
-
-        if " " in self.name or "-" in self.name:
-            raise ValueError(
-                f"Invalid zone name '{self.name}': spaces and dashes are forbidden."
-            )
-
         if self.max_drones < 1:
-            raise ValueError(
-                f"max_drones must be positive, got {self.max_drones}."
-            )
+            raise ValueError(f"max_drones must be at least 1, got {self.max_drones}")
 
     def get_movement_cost(self) -> int:
-        """Return the number of turns needed to enter this zone.
+        """Get the movement cost to enter this zone.
 
         Returns:
-            One turn for normal and priority zones, or two turns for
-            restricted zones.
+            1 for normal/priority zones, 2 for restricted zones.
 
         Raises:
-            ValueError: If the zone is blocked.
+            ValueError: If zone is blocked (cannot be entered).
         """
         if self.zone_type == ZoneType.BLOCKED:
-            raise ValueError(f"Zone '{self.name}' is blocked.")
-
+            raise ValueError(f"Zone '{self.name}' is blocked and cannot be entered.")
         if self.zone_type == ZoneType.RESTRICTED:
             return 2
-
         return 1
 
     def can_accommodate_drone(self, drones_in_zone: int) -> bool:
-        """Check whether another drone can enter this zone.
-
-        The start and end zones have unlimited capacity according to the
-        project specification.
+        """Check if the zone can accommodate another drone.
 
         Args:
-            drones_in_zone: Number of drones currently occupying the zone.
+            drones_in_zone: Current number of drones in the zone.
 
         Returns:
-            True if the drone can enter, otherwise False.
+            True if capacity allows, False otherwise.
         """
         if self.is_start or self.is_end:
             return True
-
         return drones_in_zone < self.max_drones
 
     def __hash__(self) -> int:
-        """Return a hash based on the zone name."""
+        """Return hash of the zone based on its name."""
         return hash(self.name)
 
     def __eq__(self, other: object) -> bool:
-        """Compare zones by their unique names."""
+        """Check equality with another zone based on name."""
         if not isinstance(other, Zone):
             return NotImplemented
-
         return self.name == other.name
