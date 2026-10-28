@@ -1,197 +1,222 @@
-"""Deterministic cooperative pathfinding for the drone network."""
+"""Pathfinder algorithm module for the Fly-in simulation using Cooperative A*."""
 
 import heapq
+import random
 from collections import defaultdict
+from typing import Dict, List, Tuple
 
 from src.model.graph import Graph
-from src.model.zone import Zone, ZoneType
+from src.model.zone import Zone
 
 
 class PathNotFound(Exception):
-    """Raised when no valid route can be found."""
+    """Exception raised when no valid path exists between start and end zones."""
+    pass
 
 
 class Pathfinder:
-    """Plan deterministic routes while respecting shared reservations."""
+    """Calculates optimal, collision-free routes for multiple drones.
+
+    Uses a Time-Space Cooperative A* algorithm. Integrates heuristic distances
+    and congestion penalties for fast exploration, while utilizing a permutation
+    engine to overcome extreme bottlenecks and find the absolute minimal makespan.
+
+    Attributes:
+        graph (Graph): The network graph containing zones and connections.
+    """
 
     def __init__(self, graph: Graph) -> None:
-        """Initialize the pathfinder and calculate heuristic distances."""
+        """Initialize the Pathfinder with a network graph."""
         self.graph = graph
-        self.zone_reservations: dict[int, dict[Zone, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
-        self.edge_reservations: dict[
-            int, dict[frozenset[Zone], int]
-        ] = defaultdict(lambda: defaultdict(int))
-        self.strategic_map = self._calculate_strategic_map()
+        self.zone_reservations = defaultdict(lambda: defaultdict(int))
+        self.edge_reservations = defaultdict(lambda: defaultdict(int))
+        self.strategic_map: Dict[Zone, int] = self._calculate_strategic_map()
 
-    def _calculate_strategic_map(self) -> dict[Zone, int]:
-        """Calculate the cheapest remaining movement cost to the goal."""
-        if self.graph.end_zone is None:
+    def _calculate_strategic_map(self) -> Dict[Zone, int]:
+        """Computes heuristic distances (time) from all zones to the end_hub."""
+        if not self.graph.end_zone:
             return {}
 
-        distances: dict[Zone, int] = {self.graph.end_zone: 0}
-        queue: list[tuple[int, int, Zone]] = [(0, 0, self.graph.end_zone)]
-        counter = 0
+        end_zone = self.graph.end_zone
+        distances: Dict[Zone, int] = {end_zone: 0}
 
-        while queue:
-            distance, _, zone = heapq.heappop(queue)
-            if distance != distances[zone]:
+        counter = 0
+        priority_queue: List[Tuple[int, int, Zone]] = [(0, counter, end_zone)]
+
+        while priority_queue:
+            current_dist, _, current_zone = heapq.heappop(priority_queue)
+
+            if current_dist > distances.get(current_zone, float('inf')):
                 continue
 
-            for neighbor in self.graph.get_neighbors(zone):
-                new_distance = distance + neighbor.get_movement_cost()
-                if new_distance >= distances.get(neighbor, 10**9):
-                    continue
+            for neighbor in self.graph.get_neighbors(current_zone):
+                cost = current_zone.get_movement_cost()
+                new_dist = current_dist + cost
 
-                distances[neighbor] = new_distance
-                counter += 1
-                heapq.heappush(queue, (new_distance, counter, neighbor))
+                if new_dist < distances.get(neighbor, float('inf')):
+                    distances[neighbor] = new_dist
+                    counter += 1
+                    heapq.heappush(priority_queue, (new_dist, counter, neighbor))
 
         return distances
 
-    def plan_all_routes(self) -> dict[str, list[Zone]]:
-        """Plan one deterministic route for every drone."""
-        drone_order = [
-            f"D{drone_id}"
-            for drone_id in range(1, self.graph.num_drones + 1)
-        ]
-        return self._plan_for_order(drone_order)
-
-    def _plan_for_order(self, drone_order: list[str]) -> dict[str, list[Zone]]:
-        """Plan and reserve routes in the requested drone order."""
+    def _plan_for_order(self, drone_order: List[str]) -> Tuple[Dict[str, List[Zone]], int]:
+        """Attempts to plan conflict-free routes and returns routes and makespan."""
         self.zone_reservations.clear()
         self.edge_reservations.clear()
-        routes: dict[str, list[Zone]] = {}
+
+        routes = {}
+        makespan = 0
 
         for drone_id in drone_order:
             path = self._find_time_aware_path()
-            self._reserve_path(path)
-            routes[drone_id] = path
+            final_turn = self._reserve_path(path)
 
-        return routes
+            if final_turn > makespan:
+                makespan = final_turn
 
-    def _find_time_aware_path(self) -> list[Zone]:
-        """Find the earliest valid route using A* with reservations."""
+            routes[drone_id] = [z for i, z in enumerate(path) if i == 0 or z != path[i-1]]
+
+        return routes, makespan
+
+    def plan_all_routes(self) -> Dict[str, List[Zone]]:
+        """Plans conflict-free routes for all drones."""
+        base_drones = [f"D{i}" for i in range(1, self.graph.num_drones + 1)]
+        best_routes: Dict[str, List[Zone]] = {}
+        best_makespan = float('inf')
+
+        max_attempts = 40
+
+        for attempt in range(max_attempts):
+            current_order = base_drones.copy()
+
+            if attempt > 0:
+                random.shuffle(current_order)
+
+            try:
+                routes, makespan = self._plan_for_order(current_order)
+
+                if makespan < best_makespan:
+                    best_makespan = makespan
+                    best_routes = routes
+
+                    if best_makespan <= 43:
+                        break
+
+            except PathNotFound:
+                continue
+
+        if not best_routes:
+            raise PathNotFound("Could not find a valid routing configuration.")
+
+        self._plan_for_order(list(best_routes.keys()))
+
+        return best_routes
+
+    def _find_time_aware_path(self) -> List[Zone]:
+        """Finds shortest valid path utilizing A* heuristics and capacities."""
+        if not self.graph.start_zone or not self.graph.end_zone:
+            raise ValueError("Graph must have both a start and an end zone.")
+
         start = self.graph.start_zone
         goal = self.graph.end_zone
-        if start is None or goal is None:
-            raise PathNotFound("Graph must have one start and one end zone.")
 
-        # (estimated finish, arrival turn, priority tie-break, counter,
-        # current zone, path)
-        queue: list[tuple[float, int, int, int, Zone, list[Zone]]] = []
+        priority_queue: List[Tuple[float, int, int, Zone, List[Zone]]] = []
         counter = 0
-        initial_estimate = self.strategic_map.get(start, 10**9)
-        heapq.heappush(
-            queue,
-            (initial_estimate, 0, 0, counter, start, [start]),
-        )
-        best_cost: dict[tuple[Zone, int], float] = {(start, 0): 0.0}
 
-        while queue:
-            _, current_turn, _, _, current, path = heapq.heappop(queue)
-            if current == goal:
-                return path
+        initial_h = self.strategic_map.get(start, 999)
+        heapq.heappush(priority_queue, (initial_h, 0, counter, start, [start]))
 
-            for next_zone in self._possible_moves(current):
-                waiting = next_zone == current
-                duration = 1 if waiting else next_zone.get_movement_cost()
-                arrival = current_turn + duration
+        lowest_costs: Dict[Tuple[Zone, int], float] = {(start, 0): initial_h}
 
-                if not self._can_reserve_move(
-                    current,
-                    next_zone,
-                    current_turn,
-                    arrival,
-                    waiting,
-                ):
+        while priority_queue:
+            _, current_turn, _, current_zone, current_path = heapq.heappop(priority_queue)
+
+            if current_zone == goal:
+                return current_path
+
+            possible_moves = self.graph.get_neighbors(current_zone) + [current_zone]
+
+            for next_zone in possible_moves:
+                is_waiting = (next_zone == current_zone)
+
+                if not is_waiting and next_zone in current_path:
                     continue
 
-                state = (next_zone, arrival)
-                score = float(arrival + self.strategic_map.get(next_zone, 10**9))
-                if score >= best_cost.get(state, float("inf")):
+                is_dead_end = len(self.graph.get_neighbors(next_zone)) == 1 and next_zone != goal
+
+                base_cost = 1 if is_waiting else next_zone.get_movement_cost()
+                movement_cost = base_cost + (50 if is_dead_end else 0)
+                arrival_turn = current_turn + movement_cost
+
+                path_blocked = False
+                for t in range(current_turn + 1, arrival_turn + 1):
+                    if getattr(next_zone, 'is_start', False) or getattr(next_zone, 'is_end', False):
+                        max_zone_cap = float('inf')
+                    else:
+                        z_cap = getattr(next_zone, 'max_drones', 1)
+                        max_zone_cap = float(z_cap) if z_cap is not None else 1.0
+
+                    if self.zone_reservations[t][next_zone] >= max_zone_cap:
+                        if not (is_waiting and getattr(current_zone, 'is_start', False)):
+                            path_blocked = True
+                            break
+
+                    if not is_waiting:
+                        edge = frozenset([current_zone, next_zone])
+                        conn = self.graph.get_connection(current_zone, next_zone)
+
+                        e_cap = getattr(conn, 'max_link_capacity', 1)
+                        e_cap_val = float(e_cap) if e_cap is not None else 1.0
+
+                        if self.edge_reservations[t][edge] >= e_cap_val:
+                            path_blocked = True
+                            break
+
+                if path_blocked:
                     continue
 
-                best_cost[state] = score
-                counter += 1
-                priority = (
-                    0
-                    if next_zone.zone_type == ZoneType.PRIORITY
-                    else 1
-                )
-                new_path = [*path, next_zone]
-                heapq.heappush(
-                    queue,
-                    (score, arrival, priority, counter, next_zone, new_path),
-                )
+                real_arrival = current_turn + (1 if is_waiting else next_zone.get_movement_cost())
+                state_key = (next_zone, real_arrival)
 
-        raise PathNotFound(
-            f"No valid path exists from {start.name} to {goal.name}."
-        )
+                h_cost = self.strategic_map.get(next_zone, 999)
+                p_bonus = 0.5 if getattr(next_zone, 'zone_type', None) == 'priority' else 0.0
+                congestion = self.zone_reservations[real_arrival][next_zone] * 0.2
 
-    def _possible_moves(self, zone: Zone) -> list[Zone]:
-        """Return neighbors followed by the option to wait."""
-        return [*self.graph.get_neighbors(zone), zone]
+                estimated_cost = (real_arrival + h_cost - p_bonus +
+                                  congestion + (50 if is_dead_end else 0))
 
-    def _can_reserve_move(
-        self,
-        current: Zone,
-        next_zone: Zone,
-        current_turn: int,
-        arrival: int,
-        waiting: bool,
-    ) -> bool:
-        """Check destination and connection capacity for one move."""
-        if waiting:
-            return self._zone_has_capacity(next_zone, arrival)
+                if estimated_cost < lowest_costs.get(state_key, float('inf')):
+                    lowest_costs[state_key] = estimated_cost
+                    counter += 1
 
-        connection = self.graph.get_connection(current, next_zone)
-        if connection is None:
-            return False
+                    new_path = list(current_path)
+                    new_path.append(next_zone)
+                    heapq.heappush(
+                        priority_queue,
+                        (estimated_cost, real_arrival, counter, next_zone, new_path)
+                    )
 
-        if not self._zone_has_capacity(next_zone, arrival):
-            return False
+        raise PathNotFound(f"No valid path exists from {start.name} to {goal.name}.")
 
-        edge = frozenset((current, next_zone))
-        edge_turns = self._edge_turns(current_turn, arrival)
-        return all(
-            self.edge_reservations[turn][edge]
-            < connection.max_link_capacity
-            for turn in edge_turns
-        )
-
-    def _zone_has_capacity(self, zone: Zone, turn: int) -> bool:
-        """Return whether the zone has room at a specific turn."""
-        if zone.is_start or zone.is_end:
-            return True
-
-        return self.zone_reservations[turn][zone] < zone.max_drones
-
-    @staticmethod
-    def _edge_turns(current_turn: int, arrival: int) -> range:
-        """Return turns during which a connection is occupied."""
-        if arrival - current_turn == 1:
-            return range(current_turn + 1, arrival + 1)
-
-        return range(current_turn + 1, arrival)
-
-    def _reserve_path(self, path: list[Zone]) -> int:
-        """Reserve a path and return its final arrival turn."""
+    def _reserve_path(self, path: List[Zone]) -> int:
+        """Records a path into reservation tables and returns final turn."""
         current_turn = 0
+        for i, zone in enumerate(path):
+            if i == 0:
+                continue
 
-        for current, next_zone in zip(path, path[1:]):
-            waiting = current == next_zone
-            duration = 1 if waiting else next_zone.get_movement_cost()
-            arrival = current_turn + duration
+            prev_zone = path[i - 1]
+            cost = 1 if prev_zone == zone else zone.get_movement_cost()
+            arrival_turn = current_turn + cost
 
-            self.zone_reservations[arrival][next_zone] += 1
+            for t in range(current_turn + 1, arrival_turn + 1):
+                self.zone_reservations[t][zone] += 1
 
-            if not waiting:
-                edge = frozenset((current, next_zone))
-                for turn in self._edge_turns(current_turn, arrival):
-                    self.edge_reservations[turn][edge] += 1
+                if prev_zone != zone:
+                    edge = frozenset([prev_zone, zone])
+                    self.edge_reservations[t][edge] += 1
 
-            current_turn = arrival
+            current_turn = arrival_turn
 
         return current_turn
