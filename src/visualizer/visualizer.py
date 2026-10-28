@@ -194,10 +194,10 @@ class NetworkVisualizer:
         ax.axis("off")
 
         fig.text(
-            0.5, 0.02,
-            "[Space]: Play/Pause  |  [R]: Reset  |  [ESC]: Close",
-            ha="center", va="bottom", fontsize=11, fontweight="bold",
-            color="black", bbox=dict(boxstyle="round,pad=0.4", fc="lightgray", ec="gray", lw=1)
+            0.5, 0.05,
+            "[Space]: Play/Pause  |  [R]: Reset  |  [ESC]: Close |  [+]: Faster  |  [-]: Slower",
+            ha="center", va="bottom", fontsize=10, fontweight="bold",
+            color="black", bbox=dict(boxstyle="round,pad=0.3", fc="lightgray", ec="gray", lw=1)
         )
 
         plt.subplots_adjust(bottom=0.1)
@@ -284,7 +284,7 @@ class NetworkVisualizer:
                         artist.set_visible(True)
                         if drone_id in drone_labels:
                             badge = drone_labels[drone_id]
-                            badge.set_position((x + 0.04, y + 0.04))
+                            badge.set_position((x + 0.06, y - 0.06))
                             badge.set_visible(True)
                     else:
                         artist.set_position((x, y))
@@ -332,6 +332,12 @@ class NetworkVisualizer:
                 is_paused[0] = True
             elif event.key == 'escape':
                 plt.close(fig)
+            elif event.key in ['+', '=']:
+                if anim.event_source:
+                    anim.event_source.interval = max(1, anim.event_source.interval / 3)
+            elif event.key == '-':
+                if anim.event_source:
+                    anim.event_source.interval = min(2000, anim.event_source.interval * 2)
 
         fig.canvas.mpl_connect('key_press_event', on_key)
         plt.show()
