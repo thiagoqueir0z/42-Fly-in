@@ -118,16 +118,11 @@ The system provides a rich visual experience built from scratch:
 - Animated 2D Visualization: A custom-built engine using pure matplotlib.animation. Drones move smoothly between zones using linear coordinate interpolation, realistically illustrating time delays on multi-turn routes.
 
 - Interactive Keyboard Controls:
-
-[Space]: Play/Pause the simulation
-
-[R]: Reset animation to Turn 0
-
-[ESC]: Close visualizer
-
-[+] or [=]: Increase simulation speed
-
-[-]: Decrease simulation speed
+      [Space]: Play/Pause the simulation
+      [R]: Reset animation to Turn 0
+      [ESC]: Close visualizer
+      [+] or [=]: Increase simulation speed
+      [-]: Decrease simulation speed
 
 - Terminal Colors: ANSI color codes applied to zone names during the simulation output to instantly identify zone types (e.g., restricted=red, start=green).
 
