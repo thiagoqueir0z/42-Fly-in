@@ -9,23 +9,9 @@ from src.model.zone import Zone
 
 
 class Simulator:
-    """Executes the turn-by-turn simulation of the drone fleet.
-
-    The simulator manages time (turns), coordinates drone movements,
-    enforces capacity constraints, and generates the strict output format.
-
-    Attributes:
-        graph (Graph): The network topology.
-        drones (List[Drone]): The fleet of delivery drones.
-        turn_count (int): The current simulation turn.
-    """
+    """Executes the turn-by-turn simulation enforcing physics and constraints."""
 
     def __init__(self, graph: Graph) -> None:
-        """Initialize the Simulator.
-
-        Args:
-            graph: The populated network graph.
-        """
         self.graph = graph
         self.turn_count = 0
         self.drones: List[Drone] = []
@@ -39,20 +25,18 @@ class Simulator:
         self.drones = []
         for i in range(1, self.graph.num_drones + 1):
             drone = Drone(drone_id=i, current_zone=self.graph.start_zone)
-
             drone_id_str = f"D{i}"
             if drone_id_str in all_routes:
                 drone.set_path(all_routes[drone_id_str])
                 drone.path_index = 1
-
             self.drones.append(drone)
 
     def is_simulation_complete(self) -> bool:
-        """Check if all drones have reached the end hub."""
+        """Check if all drones have successfully reached the end hub."""
         return all(drone.delivered for drone in self.drones)
 
     def run(self, all_routes: Dict[str, List[Zone]]) -> None:
-        """Run the simulation loop until all drones are delivered."""
+        """Execute the simulation loop until all drones are delivered."""
         self.history = []
         self._initialize_fleet(all_routes)
 
@@ -101,9 +85,17 @@ class Simulator:
                     continue
 
                 if self._can_move(drone, next_zone, connection, turn_connection_usage):
+                    cost = next_zone.get_movement_cost()
                     self._execute_move(drone, next_zone, connection, turn_connection_usage)
-                    colored_move = self._format_colored_move(drone.name, next_zone.name, next_zone)
+
+                    if cost > 1:
+                        target_name = f"{drone.current_zone.name}-{next_zone.name}"
+                    else:
+                        target_name = next_zone.name
+
+                    colored_move = self._format_colored_move(drone.name, target_name, next_zone)
                     turn_moves.append(colored_move)
+
                     drones_acted_this_turn.add(drone.drone_id)
                     progress_made = True
 
@@ -127,8 +119,7 @@ class Simulator:
         connection: Connection,
         turn_connection_usage: Dict[Connection, int]
     ) -> bool:
-        """Evaluate physical constraints before allowing a move."""
-
+        """Evaluate physical capacities before allowing a transition."""
         connection_occ = (
             self._get_connection_occupancy(connection) + turn_connection_usage.get(connection, 0)
         )
@@ -148,7 +139,7 @@ class Simulator:
         connection: Connection,
         turn_connection_usage: Dict[Connection, int]
     ) -> None:
-        """Execute the transition and update state trackers."""
+        """Execute the transition (instant or multi-turn transit)."""
         turn_connection_usage[connection] = turn_connection_usage.get(connection, 0) + 1
         cost = next_zone.get_movement_cost()
 
@@ -170,7 +161,6 @@ class Simulator:
                 count += 1
             elif d.current_zone == zone and d.target_zone is None:
                 count += 1
-
         return count
 
     def _get_connection_occupancy(self, connection: Connection) -> int:
@@ -183,13 +173,11 @@ class Simulator:
                 conn = self.graph.get_connection(d.current_zone, d.target_zone)
                 if conn == connection:
                     count += 1
-
         return count
 
     def _format_colored_move(self, drone_name: str, target_name: str, zone: Zone) -> str:
         """Format the movement string with ANSI color codes for terminal output."""
         reset = "\033[0m"
-
         colors = {
             "red": "\033[91m",
             "green": "\033[92m",
