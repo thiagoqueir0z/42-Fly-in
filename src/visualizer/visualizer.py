@@ -11,21 +11,13 @@ from src.model.zone import Zone, ZoneType
 
 
 class NetworkVisualizer:
-    """Renders a 2D visualization of the drone network without graph libraries.
-
-    Uses pure matplotlib to plot coordinates and draw lines for connections,
-    respecting the strict rule against using graph logic libraries.
-
-    Attributes:
-        graph (Graph): The Fly-in network graph to be rendered.
-    """
+    """Renders a 2D visualization of the drone network using pure matplotlib."""
 
     def __init__(self, graph: Graph) -> None:
-        """Initialize the visualizer with the parsed graph."""
         self.graph = graph
 
     def _get_zone_color(self, zone: Zone) -> str:
-        """Determine the rendering color for a specific zone."""
+        """Map zone logic types to display colors."""
         if zone.color and mcolors.is_color_like(zone.color):
             return zone.color
 
@@ -43,13 +35,11 @@ class NetworkVisualizer:
         return "blue"
 
     def _apply_safe_margins(self, ax) -> None:
-        """Ensures the plot has a minimum physical size to prevent clipping offsets."""
+        """Ensure the plot has a minimum physical size to prevent clipping."""
         xs = [z.x for z in self.graph.zones.values()]
         ys = [z.y for z in self.graph.zones.values()]
-
         x_pad = max(0.5, (max(xs) - min(xs)) * 0.1)
         y_pad = max(0.5, (max(ys) - min(ys)) * 0.1)
-
         ax.set_xlim(min(xs) - x_pad, max(xs) + x_pad)
         ax.set_ylim(min(ys) - y_pad, max(ys) + y_pad)
 
@@ -101,7 +91,7 @@ class NetworkVisualizer:
         plt.show()
 
     def animate_simulation(self, simulation_steps: list[dict]) -> None:
-        """Animate drone movement smoothly with PNG icons, capacities, and keyboard controls."""
+        """Animate drone movement with PNG icons, capacities, and keyboard controls."""
         total_turns = len(simulation_steps) - 1
         fig, ax = plt.subplots(figsize=(10, 8))
         ax.set_title(f"Fly-in Simulation - Turn 0/{total_turns}", fontsize=16, fontweight="bold")
@@ -161,8 +151,8 @@ class NetworkVisualizer:
         drone_artists = {}
         drone_labels = {}
         drone_img_path = "assets/drone.png"
-
         has_png = os.path.exists(drone_img_path)
+
         if has_png:
             arr_img = plt.imread(drone_img_path)
 
