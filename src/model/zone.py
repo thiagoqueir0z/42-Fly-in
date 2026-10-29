@@ -6,7 +6,7 @@ from typing import Optional
 
 
 class ZoneType(Enum):
-    """Enumeration of valid zone types in the drone network."""
+    """Enumeration of valid zone types defined by the subject."""
     NORMAL = "normal"
     PRIORITY = "priority"
     RESTRICTED = "restricted"
@@ -15,22 +15,7 @@ class ZoneType(Enum):
 
 @dataclass
 class Zone:
-    """Represents a zone in the drone network.
-
-    A zone is a location where drones can be positioned. Each zone has
-    a position, a type (normal, restricted, priority, blocked), and
-    capacity constraints.
-
-    Attributes:
-        name (str): Unique identifier for the zone.
-        x (int): X coordinate of the zone.
-        y (int): Y coordinate of the zone.
-        zone_type (ZoneType): Type of zone (normal, restricted, priority, blocked).
-        color (Optional[str]): Optional color for visualization.
-        max_drones (int): Maximum number of drones in this zone simultaneously.
-        is_start (bool): Whether this is the starting zone.
-        is_end (bool): Whether this is the ending zone.
-    """
+    """Represents a discrete location in the drone network."""
 
     name: str
     x: int
@@ -42,39 +27,28 @@ class Zone:
     is_end: bool = False
 
     def __post_init__(self) -> None:
+        """Validate zone capacity rules."""
         if self.max_drones < 1:
-            raise ValueError(f"max_drones must be at least 1, got {self.max_drones}")
+            raise ValueError(
+                f"max_drones must be a positive integer, got {self.max_drones}"
+            )
 
     def get_movement_cost(self) -> int:
-        """Get the movement cost to enter this zone.
-
-        Returns:
-            1 for normal/priority zones, 2 for restricted zones.
-
-        Raises:
-            ValueError: If zone is blocked (cannot be entered).
-        """
+        """Determine the turn cost to enter this zone."""
         if self.zone_type == ZoneType.BLOCKED:
-            raise ValueError(f"Zone '{self.name}' is blocked and cannot be entered.")
+            raise ValueError(f"Zone '{self.name}' is blocked and inaccessible.")
         if self.zone_type == ZoneType.RESTRICTED:
             return 2
         return 1
 
     def can_accommodate_drone(self, drones_in_zone: int) -> bool:
-        """Check if the zone can accommodate another drone.
-
-        Args:
-            drones_in_zone: Current number of drones in the zone.
-
-        Returns:
-            True if capacity allows, False otherwise.
-        """
+        """Check if the zone can accept another drone based on capacity."""
         if self.is_start or self.is_end:
             return True
         return drones_in_zone < self.max_drones
 
     def __hash__(self) -> int:
-        """Return hash of the zone based on its name."""
+        """Zone identity is strictly tied to its unique name."""
         return hash(self.name)
 
     def __eq__(self, other: object) -> bool:
