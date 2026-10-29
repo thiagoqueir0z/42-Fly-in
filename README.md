@@ -6,10 +6,10 @@ Fly-in is an autonomous drone routing system that efficiently navigates multiple
 
 The system must:
 - Parse map configuration files defining zones and connections
-- Find optimal paths for all drones using advanced pathfinding
-- Simulate turn-by-turn movement with capacity constraints
-- Visualize results through colored terminal output
-- Respect zone types (normal, restricted, priority, blocked) and movement costs
+- Find optimal, collision-free paths for all drones using advanced space-time pathfinding
+- Simulate turn-by-turn movement with strict capacity constraints
+- Visualize results through colored terminal output and an animated 2D graphical interface
+- Respect zone types (normal, restricted, priority, blocked) and their movement costs
 
 ## Instructions
 
@@ -36,7 +36,7 @@ make run
 ### Running a Specific Map
 
 ```bash
-make run-map MAP=maps/medium/03_circular_loop.txt
+make run MAP=maps/medium/03_circular_loop.txt
 ```
 
 ### Debug Mode
@@ -56,10 +56,12 @@ make lint-strict   # Run mypy in strict mode
 
 ### Cleaning
 
-Remove temporary files and caches:
+Remove temporary files, caches, and the virtual environment:
 
 ```bash
-make clean
+make clean         # Removes __pycache__, .mypy_cache, etc.
+make fclean        # Runs clean and removes the virtual environment
+make re            # Fully rebuilds the environment and runs the project
 ```
 
 ## Project Structure
@@ -77,26 +79,29 @@ src/
 ├── simulator/
 │     ├── simulator.py        # Simulation engine
 ├── pathfinder/
-│     └── pathfinder.py       # Pathfinding algorithms
+│     └── pathfinder.py       # Cooperative A* Pathfinding algorithm
 └── visualizer/
-      └── visualizer.py       # Graphical map rendering & visualization
+      └── visualizer.py       # 2D animated map rendering & visualization
 ```
 
 ## Algorithm Overview
 
 ### Pathfinding Strategy
 
-The pathfinding system uses:
-- **Dijkstra**: For lowest-cost paths considering zone type costs
-- **Constraint handling**: Respects zone capacity and connection limits
+The pathfinding system was engineered to solve complex deadlocks and throughput limits using:
+
+- Time-Space A Search*: Drones book nodes (zones) and edges (connections) in a 4D reservation table mapping time and space. This ensures mathematically guaranteed collision-free routes.
+- Permutation Engine: To overcome extreme bottlenecks without exponential time complexity, the system uses Prioritized Planning, shuffling drone calculation order and picking the configuration that yields the absolute minimal makespan.
+- Dijkstra's Heuristic: Used in reverse from the goal hub to map precise topological costs considering priority/restricted zones, feeding the A* algorithm with perfect heuristic data.
 
 ### Simulation Engine
 
-Turn-by-turn simulation respects:
+The turn-by-turn simulation strictly respects:
+
 - Zone occupancy constraints (max_drones parameter)
 - Connection capacity constraints (max_link_capacity parameter)
-- Movement costs based on zone types
-- Deadlock avoidance and intelligent waiting
+- Multi-turn transit mechanics (e.g., restricted zones requiring a 2-turn transit over a connection)
+- Cascading dynamic movements within the same turn
 
 ### Performance Benchmarks
 
@@ -108,10 +113,23 @@ Target performance based on optimal turns:
 
 ## Visualization
 
-The system provides:
-- **Static 2D Map**: A graphical interface built with pure `matplotlib` that renders the network topology, node coordinates, and connections before the simulation begins.
-- **Terminal Colors**: ANSI color codes applied to zone names during the simulation output to instantly identify zone types (e.g., restricted=red, start=green).
-- **Turn-by-turn Display**: Shows concurrent drone movements precisely formatted per simulation turn.
+The system provides a rich visual experience built from scratch:
+
+- Animated 2D Visualization: A custom-built engine using pure matplotlib.animation. Drones move smoothly between zones using linear coordinate interpolation, realistically illustrating time delays on multi-turn routes.
+
+- Interactive Keyboard Controls:
+
+[Space]: Play/Pause the simulation
+
+[R]: Reset animation to Turn 0
+
+[ESC]: Close visualizer
+
+[+] or [=]: Increase simulation speed
+
+[-]: Decrease simulation speed
+
+- Terminal Colors: ANSI color codes applied to zone names during the simulation output to instantly identify zone types (e.g., restricted=red, start=green).
 
 ## Example Input & Expected Output
 
@@ -136,8 +154,9 @@ D1-goal D2-goal
 ## Resources
 
 ### Graph Theory
+- [Cooperative A*](https://davidstarsilver.wordpress.com/wp-content/uploads/2025/05/aiide-05.pdf)
+- [Multi-Agent Path Finding (MAPF)](https://jiaoyangli.me/research/mapf/)
 - [Dijkstra's Algorithm](https://coddy.tech/visualize/graphs/dijkstras-algorithm)
-- [Graph Theory Basics](https://www.khanacademy.org/computing/computer-science/algorithms/graph-representation/a/introduction-to-graphs)
 
 ### Python Best Practices
 - [PEP 257 - Docstring Conventions](https://www.python.org/dev/peps/pep-0257/)
@@ -146,7 +165,6 @@ D1-goal D2-goal
 - [flake8 - Style Guide Enforcement](https://flake8.pycqa.org/)
 
 ### AI Usage in This Project
-
 AI has been used to:
 - Provide code structure recommendations
 - Explain algorithm concepts (Dijkstra, constraint satisfaction)
@@ -158,14 +176,13 @@ All AI-generated code was reviewed, tested, and modified to ensure it matches pr
 
 ## Technical Choices
 
-### Why Dijkstra's Algorithm?
-- Evolved from a basic BFS approach to accurately evaluate movement costs based on zone types (restricted=2 turns, priority=1 turn).
-- Ensures the drone fleet dynamically avoids traffic bottlenecks, prioritizing faster topological routes over simply minimizing the number of zone hops.
+### Why Time-Space Cooperative A*?
+- Evolved from a basic BFS/Dijkstra approach to accurately prevent drone collisions in narrow corridors. Standard pathfinding ignores other agents, while Cooperative A* considers the future position of all previously routed drones.
 
 ### Why Object-Oriented Design?
 - Clear separation of concerns (Parser, Simulator, PathFinder)
-- Easy to extend with new features (e.g., new zone types)
 - Natural representation of domain concepts (Drone, Zone, Graph)
+- Highly scalable and testable architecture
 
 ### Type Safety
 - mypy ensures type correctness before runtime
@@ -175,18 +192,15 @@ All AI-generated code was reviewed, tested, and modified to ensure it matches pr
 ## Performance Analysis
 
 ### Time Complexity
-- Pathfinding (Dijkstra): O((V + E) log V) where V=zones, E=connections
-- Simulation: O(D × T × V) where D=drones, T=turns
-- Overall: O(((V + E) log V) + (D × T × V))
+- Pathfinding: $O(D \times (V + E) \log V)$ where $V$=zones, $E$=connections, $D$=drones
+- Simulation: $O(D \times T)$ where $T$=turns
 
 ### Space Complexity
-- Graph storage: O(V + E)
-- Simulation state: O(D × V)
-- Overall: O(V + E + D × V)
+- Graph storage: $O(V + E)$
+- Path Reservation Tables: $O(T \times (V + E))$
+- Overall Space: $O(T \times (V + E))$
 
 ## Future Enhancements
-
-- Multi-path routing for better load distribution
-- Machine learning-based path optimization
-- Real-time simulation speed control
-- Advanced deadlock detection and resolution
+- Multi-path routing for continuous load distribution (infinite drone streams)
+- Machine learning-based path optimization to replace random permutations
+- Advanced real-time deadlock resolution during simulation phase
