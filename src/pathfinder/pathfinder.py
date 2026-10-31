@@ -3,7 +3,7 @@
 import heapq
 import random
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, DefaultDict, Any
 
 from src.model.graph import Graph
 from src.model.zone import Zone
@@ -15,16 +15,36 @@ class PathNotFound(Exception):
 
 
 class Pathfinder:
-    """Calculates optimal, collision-free routes for multiple drones."""
+    """Calculates optimal, collision-free routes for multiple drones.
+
+    Attributes:
+        graph (Graph): The network graph containing zones and connections.
+        zone_reservations (Dict): Time-space table tracking zone occupancy per turn.
+        edge_reservations (Dict): Time-space table tracking connection usage per turn.
+        strategic_map (Dict[Zone, int]): Heuristic distance map from all zones to the end hub.
+    """
 
     def __init__(self, graph: Graph) -> None:
+        """Initialize the Pathfinder with a network graph.
+
+        Args:
+            graph: The Graph object representing the network topology.
+        """
         self.graph = graph
-        self.zone_reservations = defaultdict(lambda: defaultdict(int))
-        self.edge_reservations = defaultdict(lambda: defaultdict(int))
+        self.zone_reservations: DefaultDict[int, DefaultDict[Zone, int]] = (
+            defaultdict(lambda: defaultdict(int))
+        )
+        self.edge_reservations: DefaultDict[int, DefaultDict[Any, int]] = (
+            defaultdict(lambda: defaultdict(int))
+        )
         self.strategic_map: Dict[Zone, int] = self._calculate_strategic_map()
 
     def _calculate_strategic_map(self) -> Dict[Zone, int]:
-        """Computes true heuristic distances from all zones to the end_hub."""
+        """Computes true heuristic distances from all zones to the end_hub.
+
+        Returns:
+            A dictionary mapping each Zone to its minimum topological turn cost to reach the goal.
+        """
         if not self.graph.end_zone:
             return {}
 
@@ -51,7 +71,14 @@ class Pathfinder:
         return distances
 
     def _plan_for_order(self, drone_order: List[str]) -> Tuple[Dict[str, List[Zone]], int]:
-        """Attempts to plan routes for a specific sequence of drones."""
+        """Attempts to plan routes for a specific sequence of drones.
+
+        Args:
+            drone_order: A list of drone ID strings defining the calculation priority.
+
+        Returns:
+            A tuple containing a dictionary of routes per drone and the total makespan.
+        """
         self.zone_reservations.clear()
         self.edge_reservations.clear()
         routes = {}
@@ -70,7 +97,14 @@ class Pathfinder:
         return routes, makespan
 
     def plan_all_routes(self) -> Dict[str, List[Zone]]:
-        """Finds conflict-free routes for all drones, optimizing the makespan."""
+        """Finds conflict-free routes for all drones, optimizing the makespan.
+
+        Returns:
+            A dictionary mapping drone IDs to their calculated list of Zones.
+
+        Raises:
+            PathNotFound: If no valid configuration can be found after all attempts.
+        """
         base_drones = [f"D{i}" for i in range(1, self.graph.num_drones + 1)]
         best_routes: Dict[str, List[Zone]] = {}
         best_makespan = float('inf')
@@ -101,7 +135,15 @@ class Pathfinder:
         return best_routes
 
     def _find_time_aware_path(self) -> List[Zone]:
-        """A* algorithm incorporating time-space reservations and zone capacities."""
+        """A* algorithm incorporating time-space reservations and zone capacities.
+
+        Returns:
+            A list of Zone objects representing a valid, collision-free path.
+
+        Raises:
+            ValueError: If the graph lacks a start or end zone.
+            PathNotFound: If no valid path to the goal can be found.
+        """
         if not self.graph.start_zone or not self.graph.end_zone:
             raise ValueError("Graph must have both a start and an end zone.")
 
@@ -183,7 +225,14 @@ class Pathfinder:
         raise PathNotFound(f"No valid path exists from {start.name} to {goal.name}.")
 
     def _reserve_path(self, path: List[Zone]) -> int:
-        """Records a resolved path into the time-space reservation tables."""
+        """Records a resolved path into the time-space reservation tables.
+
+        Args:
+            path: A list of Zone objects representing the calculated route.
+
+        Returns:
+            An integer representing the final turn number of arrival.
+        """
         current_turn = 0
         for i, zone in enumerate(path):
             if i == 0:

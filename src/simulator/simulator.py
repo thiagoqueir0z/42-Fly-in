@@ -9,16 +9,35 @@ from src.model.zone import Zone
 
 
 class Simulator:
-    """Executes the turn-by-turn simulation enforcing physics and constraints."""
+    """Executes the turn-by-turn simulation enforcing physics and constraints.
+
+    Attributes:
+        graph (Graph): The network topology to simulate on.
+        turn_count (int): The current simulation turn number.
+        drones (List[Drone]): The active fleet of drones in the simulation.
+        history (List[Dict[str, str]]): Record of state steps used by the visualizer.
+    """
 
     def __init__(self, graph: Graph) -> None:
+        """Initialize the Simulator.
+
+        Args:
+            graph: The populated network Graph object.
+        """
         self.graph = graph
         self.turn_count = 0
         self.drones: List[Drone] = []
         self.history: List[Dict[str, str]] = []
 
     def _initialize_fleet(self, all_routes: Dict[str, List[Zone]]) -> None:
-        """Instantiate drones and assign their initial paths."""
+        """Instantiate drones and assign their initial paths.
+
+        Args:
+            all_routes: A dictionary mapping drone IDs to their calculated Zone lists.
+
+        Raises:
+            ValueError: If the graph is missing a start zone.
+        """
         if not self.graph.start_zone:
             raise ValueError("Cannot initialize fleet: Graph has no start zone.")
 
@@ -32,15 +51,27 @@ class Simulator:
             self.drones.append(drone)
 
     def is_simulation_complete(self) -> bool:
-        """Check if all drones have successfully reached the end hub."""
+        """Check if all drones have successfully reached the end hub.
+
+        Returns:
+            True if all active drones are delivered, False otherwise.
+        """
         return all(drone.delivered for drone in self.drones)
 
     def run(self, all_routes: Dict[str, List[Zone]]) -> None:
-        """Execute the simulation loop until all drones are delivered."""
+        """Execute the simulation loop until all drones are delivered.
+
+        Args:
+            all_routes: A dictionary mapping drone IDs to their calculated routes.
+        """
         self.history = []
         self._initialize_fleet(all_routes)
 
-        initial_state = {f"D{drone.drone_id}": self.graph.start_zone.name for drone in self.drones}
+        start_zone = self.graph.start_zone
+        if not start_zone:
+            raise ValueError("Simulation error: Start zone missing.")
+
+        initial_state = {f"D{drone.drone_id}": start_zone.name for drone in self.drones}
         self.history.append(initial_state)
 
         while not self.is_simulation_complete():
@@ -52,18 +83,19 @@ class Simulator:
                 break
 
     def _simulate_turn(self) -> None:
-        """Process a single discrete time step for all drones."""
+        """Process a single discrete time step for all drones in the network."""
         turn_moves: List[str] = []
         drones_acted_this_turn: Set[int] = set()
         turn_connection_usage: Dict[Connection, int] = {}
 
         for drone in self.drones:
-            if drone.target_zone and drone.turns_in_transit > 0:
+            target = drone.target_zone
+            if target and drone.turns_in_transit > 0:
                 drone.turns_in_transit -= 1
                 drones_acted_this_turn.add(drone.drone_id)
 
                 if drone.turns_in_transit == 0:
-                    drone.advance_to_zone(drone.target_zone)
+                    drone.advance_to_zone(target)
                     colored_move = self._format_colored_move(
                         drone.name, drone.current_zone.name, drone.current_zone
                     )
@@ -104,9 +136,10 @@ class Simulator:
 
         turn_state = {}
         for drone in self.drones:
-            if drone.target_zone and drone.turns_in_transit > 0:
+            target = drone.target_zone
+            if target and drone.turns_in_transit > 0:
                 turn_state[f"D{drone.drone_id}"] = (
-                    f"{drone.current_zone.name}-{drone.target_zone.name}"
+                    f"{drone.current_zone.name}-{target.name}"
                 )
             else:
                 turn_state[f"D{drone.drone_id}"] = drone.current_zone.name
@@ -119,7 +152,17 @@ class Simulator:
         connection: Connection,
         turn_connection_usage: Dict[Connection, int]
     ) -> bool:
-        """Evaluate physical capacities before allowing a transition."""
+        """Evaluate physical capacities before allowing a transition.
+
+        Args:
+            drone: The Drone attempting to move.
+            next_zone: The intended destination Zone.
+            connection: The Connection linking the current and next zone.
+            turn_connection_usage: Dictionary tracking connections already used this turn.
+
+        Returns:
+            True if the capacity of both the connection and destination zone allows movement.
+        """
         connection_occ = (
             self._get_connection_occupancy(connection) + turn_connection_usage.get(connection, 0)
         )
@@ -139,7 +182,14 @@ class Simulator:
         connection: Connection,
         turn_connection_usage: Dict[Connection, int]
     ) -> None:
-        """Execute the transition (instant or multi-turn transit)."""
+        """Execute the transition (instant or multi-turn transit).
+
+        Args:
+            drone: The Drone executing the move.
+            next_zone: The destination Zone.
+            connection: The Connection used to traverse.
+            turn_connection_usage: Dictionary tracking connection usages to increment.
+        """
         turn_connection_usage[connection] = turn_connection_usage.get(connection, 0) + 1
         cost = next_zone.get_movement_cost()
 
@@ -149,7 +199,14 @@ class Simulator:
             drone.advance_to_zone(next_zone)
 
     def _get_zone_occupancy(self, zone: Zone) -> int:
-        """Calculate how many drones are physically in or heading to a zone."""
+        """Calculate how many drones are physically in or heading to a zone.
+
+        Args:
+            zone: The Zone to evaluate.
+
+        Returns:
+            An integer representing the current occupancy count.
+        """
         if zone.is_start or zone.is_end:
             return 0
 
@@ -164,7 +221,14 @@ class Simulator:
         return count
 
     def _get_connection_occupancy(self, connection: Connection) -> int:
-        """Calculate how many drones are currently stuck in transit on a connection."""
+        """Calculate how many drones are currently stuck in transit on a connection.
+
+        Args:
+            connection: The Connection to evaluate.
+
+        Returns:
+            An integer representing the number of drones occupying the connection.
+        """
         count = 0
         for d in self.drones:
             if d.delivered:
@@ -176,7 +240,16 @@ class Simulator:
         return count
 
     def _format_colored_move(self, drone_name: str, target_name: str, zone: Zone) -> str:
-        """Format the movement string with ANSI color codes for terminal output."""
+        """Format the movement string with ANSI color codes for terminal output.
+
+        Args:
+            drone_name: String identifier of the drone.
+            target_name: String name of the target destination.
+            zone: The Zone object to determine the color code.
+
+        Returns:
+            A formatted string containing ANSI escape codes for the terminal.
+        """
         reset = "\033[0m"
         colors = {
             "red": "\033[91m",

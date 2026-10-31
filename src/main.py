@@ -13,10 +13,10 @@ def main() -> int:
     """Run the main simulation program.
 
     Parses command-line arguments, loads the graph from the map file,
-    and initializes the simulation pipeline.
+    and initializes the simulation and visualization pipeline.
 
     Returns:
-        Exit code (0 for success, 1 for error).
+        int: Exit code (0 for success, 1 for error).
     """
     if len(sys.argv) != 2:
         print("Usage: python3 src/main.py <path_to_map_file>")
@@ -39,6 +39,8 @@ def main() -> int:
 
         visualizer = NetworkVisualizer(graph)
         visualizer.animate_simulation(simulator.history)
+
+        return 0
 
     except MapParserError as e:
         print(f"Error parsing map: {e}")

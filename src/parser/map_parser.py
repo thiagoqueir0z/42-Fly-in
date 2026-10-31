@@ -13,13 +13,30 @@ class MapParserError(Exception):
 
 
 class MapParser:
-    """Parses map configuration files and builds the network Graph."""
+    """Parses map configuration files and builds the network Graph.
+
+    Attributes:
+        filepath (Path): The path to the map configuration file.
+    """
 
     def __init__(self, filepath: str | Path) -> None:
+        """Initialize the MapParser.
+
+        Args:
+            filepath: String or Path object pointing to the map file.
+        """
         self.filepath = Path(filepath)
 
     def parse(self) -> Graph:
-        """Parse the file line by line and build the Graph object."""
+        """Parse the file line by line and build the Graph object.
+
+        Returns:
+            A populated Graph object ready for pathfinding and simulation.
+
+        Raises:
+            MapParserError: If the file is missing, empty, or lacks start/end hubs.
+            ValueError: If the file contains unknown directives or syntax errors.
+        """
         if not self.filepath.exists() or not self.filepath.is_file():
             raise MapParserError(f"Map file not found: {self.filepath}")
 
@@ -64,7 +81,15 @@ class MapParser:
         return graph
 
     def _extract_metadata(self, line: str) -> Tuple[str, Dict[str, str]]:
-        """Extract [key=value] metadata blocks into a dictionary."""
+        """Extract [key=value] metadata blocks into a dictionary.
+
+        Args:
+            line: The raw line string from the file.
+
+        Returns:
+            A tuple containing the cleaned line string (without brackets)
+            and a dictionary of the extracted metadata key-value pairs.
+        """
         metadata = {}
         matches = re.findall(r"\[(.*?)\]", line)
         for match in matches:
@@ -78,7 +103,15 @@ class MapParser:
         return clean_line, metadata
 
     def _parse_zone(self, graph: Graph, line: str) -> None:
-        """Parse a zone directive and inject it into the graph."""
+        """Parse a zone directive and inject it into the graph.
+
+        Args:
+            graph: The Graph instance being populated.
+            line: The raw string line representing a zone/hub.
+
+        Raises:
+            ValueError: If the zone format is invalid or contains an unknown ZoneType.
+        """
         clean_line, metadata = self._extract_metadata(line)
         parts = clean_line.split()
 
@@ -117,7 +150,15 @@ class MapParser:
         graph.add_zone(zone)
 
     def _parse_connection(self, graph: Graph, line: str) -> None:
-        """Parse a connection directive and inject it into the graph."""
+        """Parse a connection directive and inject it into the graph.
+
+        Args:
+            graph: The Graph instance being populated.
+            line: The raw string line representing a connection.
+
+        Raises:
+            ValueError: If the connection format is invalid or references unknown zones.
+        """
         clean_line, metadata = self._extract_metadata(line)
 
         if not clean_line.startswith("connection:"):

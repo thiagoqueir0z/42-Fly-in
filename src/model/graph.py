@@ -9,7 +9,16 @@ from src.model.zone import Zone, ZoneType
 
 @dataclass
 class Graph:
-    """Represents the complete network of zones and connections."""
+    """Represents the complete network of zones and connections.
+
+    Attributes:
+        num_drones (int): The total number of drones to route.
+        zones (Dict[str, Zone]): Dictionary mapping zone names to Zone objects.
+        connections (Set[Connection]): Set of all unique network connections.
+        adjacency_list (Dict[str, List[Connection]]): Maps zone names to adjacent connections.
+        start_zone (Optional[Zone]): The designated starting hub.
+        end_zone (Optional[Zone]): The designated ending hub.
+    """
 
     num_drones: int
     zones: Dict[str, Zone] = field(default_factory=dict, init=False)
@@ -19,12 +28,24 @@ class Graph:
     end_zone: Optional[Zone] = field(default=None, init=False)
 
     def __post_init__(self) -> None:
-        """Validate initial graph constraints."""
+        """Validate initial graph constraints.
+
+        Raises:
+            ValueError: If num_drones is less than 1.
+        """
         if self.num_drones < 1:
             raise ValueError(f"nb_drones must be a positive integer. Got {self.num_drones}")
 
     def add_zone(self, zone: Zone) -> None:
-        """Add a zone and enforce unique start/end hub rules."""
+        """Add a zone and enforce unique start/end hub rules.
+
+        Args:
+            zone: The Zone object to add.
+
+        Raises:
+            ValueError: If a zone with the same name exists,
+            or if multiple start/end zones are added.
+        """
         if zone.name in self.zones:
             raise ValueError(f"Zone '{zone.name}' already exists in the graph.")
 
@@ -42,7 +63,14 @@ class Graph:
             self.end_zone = zone
 
     def add_connection(self, connection: Connection) -> None:
-        """Add a bidirectional connection and prevent duplicates."""
+        """Add a bidirectional connection and prevent duplicates.
+
+        Args:
+            connection: The Connection object to add.
+
+        Raises:
+            ValueError: If the connection references missing zones or is a duplicate.
+        """
         if (
             connection.zone_a.name not in self.zones
             or connection.zone_b.name not in self.zones
@@ -59,11 +87,25 @@ class Graph:
         self.adjacency_list[connection.zone_b.name].append(connection)
 
     def get_zone(self, name: str) -> Optional[Zone]:
-        """Retrieve a zone by its unique name."""
+        """Retrieve a zone by its unique name.
+
+        Args:
+            name: The string name of the zone.
+
+        Returns:
+            The Zone object if found, otherwise None.
+        """
         return self.zones.get(name)
 
     def get_neighbors(self, zone: Zone) -> List[Zone]:
-        """Get adjacent zones, strictly ignoring inaccessible 'blocked' zones."""
+        """Get adjacent zones, strictly ignoring inaccessible 'blocked' zones.
+
+        Args:
+            zone: The reference Zone.
+
+        Returns:
+            A list of valid, unblocked neighboring Zone objects.
+        """
         if zone.name not in self.adjacency_list:
             return []
 
@@ -75,7 +117,15 @@ class Graph:
         return neighbors
 
     def get_connection(self, zone_a: Zone, zone_b: Zone) -> Optional[Connection]:
-        """Retrieve the specific connection linking two zones."""
+        """Retrieve the specific connection linking two zones.
+
+        Args:
+            zone_a: The first Zone.
+            zone_b: The second Zone.
+
+        Returns:
+            The Connection object linking the zones, or None if it does not exist.
+        """
         if zone_a.name not in self.adjacency_list:
             return None
 
@@ -85,7 +135,14 @@ class Graph:
         return None
 
     def is_valid_path(self, path: List[Zone]) -> bool:
-        """Check if a path is contiguous and free of blocked zones."""
+        """Check if a path is contiguous and free of blocked zones.
+
+        Args:
+            path: A list of Zone objects representing the route.
+
+        Returns:
+            True if the path is fully connected and valid, False otherwise.
+        """
         if not path:
             return False
 

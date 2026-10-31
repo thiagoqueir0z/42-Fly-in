@@ -1,23 +1,45 @@
 """Network visualizer for the Fly-in simulation."""
 
+import os
+from typing import Any, Dict, List, Optional, Tuple, Set
+
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.animation import FuncAnimation
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-import os
 
 from src.model.graph import Graph
 from src.model.zone import Zone, ZoneType
 
 
 class NetworkVisualizer:
-    """Renders a 2D visualization of the drone network using pure matplotlib."""
+    """Renders a 2D visualization of the drone network using pure matplotlib.
+
+    Attributes:
+        graph (Graph): The Fly-in network graph to be rendered.
+        bg_color (str): The background color for the dark mode theme.
+        line_color (str): The color for the connections in the network.
+    """
 
     def __init__(self, graph: Graph) -> None:
+        """Initialize the visualizer with the parsed graph.
+
+        Args:
+            graph: The Graph object representing the network to render.
+        """
         self.graph = graph
+        self.bg_color = "#1E1E1E"
+        self.line_color = "#CCCCCC"
 
     def _get_zone_color(self, zone: Zone) -> str:
-        """Map zone logic types to display colors."""
+        """Map zone logic types to display colors.
+
+        Args:
+            zone: The Zone object to evaluate.
+
+        Returns:
+            A string representing the matplotlib-compatible color name.
+        """
         if zone.color and mcolors.is_color_like(zone.color):
             return zone.color
 
@@ -32,10 +54,14 @@ class NetworkVisualizer:
         if zone.zone_type == ZoneType.PRIORITY:
             return "orange"
 
-        return "blue"
+        return "dodgerblue"
 
-    def _apply_safe_margins(self, ax) -> None:
-        """Ensure the plot has a minimum physical size to prevent clipping."""
+    def _apply_safe_margins(self, ax: Any) -> None:
+        """Ensure the plot has a minimum physical size to prevent clipping.
+
+        Args:
+            ax: The matplotlib axis object being drawn on.
+        """
         xs = [z.x for z in self.graph.zones.values()]
         ys = [z.y for z in self.graph.zones.values()]
         x_pad = max(0.5, (max(xs) - min(xs)) * 0.1)
@@ -43,17 +69,39 @@ class NetworkVisualizer:
         ax.set_xlim(min(xs) - x_pad, max(xs) + x_pad)
         ax.set_ylim(min(ys) - y_pad, max(ys) + y_pad)
 
+    def _draw_background_image(self, ax: Any) -> None:
+        """Draws the 42 watermark image on the background if it exists.
+
+        Args:
+            ax: The matplotlib axis object being drawn on.
+        """
+        bg_img_path = "assets/42_bg.png"
+        if os.path.exists(bg_img_path):
+            bg_img = plt.imread(bg_img_path)
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+            ax.imshow(
+                bg_img,
+                extent=[xmin, xmax, ymin, ymax],
+                aspect='auto',
+                zorder=0,
+                alpha=0.15
+            )
+
     def show_static_map(self) -> None:
-        """Render and display the static network topology."""
+        """Render and display the static network topology before simulation."""
         fig, ax = plt.subplots(figsize=(10, 8))
-        ax.set_title("Fly-in Drone Network Topology", fontsize=16, fontweight="bold")
+
+        fig.patch.set_facecolor(self.bg_color)
+        ax.set_facecolor(self.bg_color)
+        ax.set_title("Fly-in Drone Network Topology", fontsize=16, fontweight="bold", color="white")
 
         for connection in self.graph.connections:
             x_coords = [connection.zone_a.x, connection.zone_b.x]
             y_coords = [connection.zone_a.y, connection.zone_b.y]
             ax.plot(
                 x_coords, y_coords,
-                color="black",
+                color=self.line_color,
                 linewidth=2,
                 alpha=0.5,
                 zorder=1
@@ -66,7 +114,7 @@ class NetworkVisualizer:
                zone.x, zone.y,
                s=900,
                c=color,
-               edgecolor="black",
+               edgecolor="white",
                linewidth=1.5,
                zorder=2
             )
@@ -86,22 +134,31 @@ class NetworkVisualizer:
                 )
 
         self._apply_safe_margins(ax)
+        self._draw_background_image(ax)
         ax.axis("off")
         plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
         plt.show()
 
-    def animate_simulation(self, simulation_steps: list[dict]) -> None:
-        """Animate drone movement with PNG icons, capacities, and keyboard controls."""
+    def animate_simulation(self, simulation_steps: List[Dict[str, str]]) -> None:
+        """Animate drone movement with PNG icons, capacities, and keyboard controls.
+
+        Args:
+            simulation_steps: A list of dictionaries representing drone positions at each turn.
+        """
         total_turns = len(simulation_steps) - 1
         fig, ax = plt.subplots(figsize=(10, 8))
-        ax.set_title(f"Fly-in Simulation - Turn 0/{total_turns}", fontsize=16, fontweight="bold")
+
+        fig.patch.set_facecolor(self.bg_color)
+        ax.set_facecolor(self.bg_color)
+        ax.set_title(f"Fly-in Simulation - Turn 0/{total_turns}",
+                     fontsize=16, fontweight="bold", color="white")
 
         for connection in self.graph.connections:
             x_coords = [connection.zone_a.x, connection.zone_b.x]
             y_coords = [connection.zone_a.y, connection.zone_b.y]
             ax.plot(
                 x_coords, y_coords,
-                color="black",
+                color=self.line_color,
                 linewidth=2,
                 alpha=0.5,
                 zorder=1
@@ -129,7 +186,7 @@ class NetworkVisualizer:
                 zone.x, zone.y,
                 s=1200,
                 c=color,
-                edgecolor="black",
+                edgecolor="white",
                 linewidth=1.5,
                 zorder=2
             )
@@ -148,8 +205,8 @@ class NetworkVisualizer:
                     zorder=3.5
                 )
 
-        drone_artists = {}
-        drone_labels = {}
+        drone_artists: Dict[str, Any] = {}
+        drone_labels: Dict[str, Any] = {}
         drone_img_path = "assets/drone.png"
         has_png = os.path.exists(drone_img_path)
 
@@ -175,24 +232,25 @@ class NetworkVisualizer:
                 t = ax.text(
                     0, 0, drone_id_str,
                     fontsize=9, fontweight="bold", color="white",
-                    bbox=dict(boxstyle="circle,pad=0.3", fc="darkblue", ec="black", lw=1),
+                    bbox=dict(boxstyle="circle,pad=0.3", fc="darkblue", ec="white", lw=1),
                     ha="center", va="center", zorder=4
                 )
                 drone_artists[drone_id_str] = t
 
         self._apply_safe_margins(ax)
+        self._draw_background_image(ax)
         ax.axis("off")
 
         fig.text(
             0.5, 0.05,
-            "[Space]: Play/Pause  |  [R]: Reset  |  [ESC]: Close |  [+]: Faster  |  [-]: Slower",
+            "[Space]: Play/Pause  |  [R]: Reset  |  [ESC]: Close",
             ha="center", va="bottom", fontsize=10, fontweight="bold",
             color="black", bbox=dict(boxstyle="round,pad=0.3", fc="lightgray", ec="gray", lw=1)
         )
 
         plt.subplots_adjust(bottom=0.1)
 
-        special_coords = set()
+        special_coords: Set[Tuple[float, float]] = set()
         for z in self.graph.zones.values():
             if z.is_start or z.is_end:
                 special_coords.add((round(z.x, 4), round(z.y, 4)))
@@ -200,7 +258,7 @@ class NetworkVisualizer:
         SUB_STEPS = 10
         smooth_frames = []
 
-        def get_coords(z_name: str):
+        def get_coords(z_name: str) -> Optional[Tuple[float, float]]:
             if z_name in self.graph.zones:
                 z = self.graph.zones[z_name]
                 return z.x, z.y
@@ -232,12 +290,12 @@ class NetworkVisualizer:
                         raw_positions[drone_id] = (round(x, 4), round(y, 4))
 
                 interpolated_state = {}
-                coord_counts = {}
+                coord_counts: Dict[Tuple[float, float], int] = {}
 
                 for pos in raw_positions.values():
                     coord_counts[pos] = coord_counts.get(pos, 0) + 1
 
-                coord_seen = {}
+                coord_seen: Dict[Tuple[float, float], int] = {}
                 for drone_id, (x, y) in raw_positions.items():
                     total = coord_counts[(x, y)]
                     if total > 1 and (x, y) not in special_coords:
@@ -256,7 +314,7 @@ class NetworkVisualizer:
         current_frame = [0]
         is_paused = [True]
 
-        def update(frame_idx: int):
+        def update(frame_idx: int) -> List[Any]:
             current_frame[0] = frame_idx
             turn_num, drone_coords = smooth_frames[frame_idx]
 
@@ -281,7 +339,8 @@ class NetworkVisualizer:
                         artist.set_visible(True)
 
             ax.set_title(
-                f"Fly-in Simulation - Turn {turn_num}/{total_turns}", fontsize=16, fontweight="bold"
+                f"Fly-in Simulation - Turn {turn_num}/{total_turns}",
+                fontsize=16, fontweight="bold", color="white"
             )
 
             if frame_idx == max_frames - 1:
@@ -294,7 +353,7 @@ class NetworkVisualizer:
             fig,
             update,
             frames=max_frames,
-            interval=100,
+            interval=50,
             blit=False,
             repeat=True
         )
@@ -303,7 +362,7 @@ class NetworkVisualizer:
         update(0)
         fig.canvas.draw_idle()
 
-        def on_key(event):
+        def on_key(event: Any) -> None:
             if event.key == ' ':
                 if is_paused[0]:
                     if current_frame[0] == max_frames - 1:
@@ -322,12 +381,6 @@ class NetworkVisualizer:
                 is_paused[0] = True
             elif event.key == 'escape':
                 plt.close(fig)
-            elif event.key in ['+', '=']:
-                if anim.event_source:
-                    anim.event_source.interval = max(1, anim.event_source.interval / 3)
-            elif event.key == '-':
-                if anim.event_source:
-                    anim.event_source.interval = min(2000, anim.event_source.interval * 2)
 
         fig.canvas.mpl_connect('key_press_event', on_key)
         plt.show()
